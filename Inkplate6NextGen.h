@@ -87,7 +87,7 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define CKV_SET   		{GPIOE -> BSRR = CKV;}
 #define CKV_CLEAR 		{GPIOE -> BSRR = CKV << 16;}
 
-#define SPH         	GPIO_PIN_2
+#define SPH         	GPIO_PIN_4
 #define SPH_SET     	{GPIOE -> BSRR = SPH;}
 #define SPH_CLEAR   	{GPIOE -> BSRR = SPH << 16;}
 
@@ -125,9 +125,9 @@ extern SdFat sd;
 class Inkplate : public Adafruit_GFX {
   public:
     uint8_t* D_memory_new;
-    uint8_t* _partial;
+    //uint8_t* _partial;
     uint8_t* D_memory4Bit;
-    uint8_t * _pBuffer;
+    //uint8_t * _pBuffer;
     const uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101, B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
     const uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010, B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
     const uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101, B01111111, B01111101, B01110111, B01110101, B01011111, B01011101, B01010111, B01010101};
@@ -135,9 +135,9 @@ class Inkplate : public Adafruit_GFX {
     const uint8_t pixelMaskGLUT[2] = {B00001111, B11110000};
     const uint8_t discharge[16] = {B11111111, B11111100, B11110011, B11110000, B11001111, B11001100, B11000011, B11000000, B00111111, B00111100, B00110011, B00110000, B00001111, B00001100, B00000011, B00000000};
     //BLACK->WHITE
-    const uint8_t waveform3Bit[8][8] = {{0, 0, 0, 0, 0, 0, 1, 0}, {0, 0, 0, 0, 0, 0, 0, 0}, {0, 2, 2, 2, 2, 1, 1, 0}, {2, 2, 2, 2, 2, 1, 1, 0}, {0, 0, 2, 2, 1, 1, 2, 0}, {0, 2, 2, 2, 1, 1, 2, 0}, {0, 0, 0, 2, 2, 1, 2, 0}, {2, 2, 2, 2, 2, 2, 2, 0}};
-    uint32_t* GLUT;
-    uint32_t* GLUT2;
+    const uint8_t waveform3Bit[8][8] = {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 2, 0}, {0, 0, 0, 0, 0, 2, 2, 0}, {0, 0, 0, 0, 2, 2, 2, 0}, {0, 0, 0, 2, 2, 2, 2, 0}, {0, 0, 2, 2, 2, 2, 2, 0}, {0, 2, 2, 2, 2, 2, 2, 0}, {2, 2, 2, 2, 2, 2, 2, 0}};
+    uint8_t* GLUT;
+    uint8_t* GLUT2;
 	
 	struct bitmapHeader {
 		uint16_t signature;

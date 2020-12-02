@@ -103,8 +103,8 @@ void Inkplate::begin(void)
     //_partial = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
     //_pBuffer = (uint8_t*) ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 4);
     D_memory4Bit = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
-    GLUT = (uint32_t*)malloc(256 * 8 * sizeof(uint32_t));
-    GLUT2 = (uint32_t*)malloc(256 * 8 * sizeof(uint32_t));
+    GLUT = (uint8_t*)malloc(256 * 8 * sizeof(uint32_t));
+    GLUT2 = (uint8_t*)malloc(256 * 8 * sizeof(uint32_t));
     if (D_memory_new == NULL  || D_memory4Bit == NULL || GLUT == NULL || GLUT2 == NULL)
     {
         Serial.print("Memory alloc. fail");
@@ -154,8 +154,10 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color)
     if (_displayMode == 0) {
         int x = x0 / 8;
         int x_sub = x0 % 8;
-        uint8_t temp = *(_partial + (E_INK_WIDTH/8 * y0) + x);
-        *(_partial + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
+        //uint8_t temp = *(_partial + (E_INK_WIDTH/8 * y0) + x);
+        //*(_partial + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
+        uint8_t temp = *(D_memory_new + (E_INK_WIDTH/8 * y0) + x);
+        *(D_memory_new + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
     } else {
         color &= 7;
         int x = x0 / 2;
@@ -169,8 +171,8 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color)
 void Inkplate::clearDisplay()
 {
     // Clear 1 bit per pixel display buffer
-    if (_displayMode == 0) memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
-
+    //if (_displayMode == 0) memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
+    if (_displayMode == 0) memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
     // Clear 3 bit per pixel display buffer
     if (_displayMode == 1) memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
 }
@@ -184,6 +186,8 @@ void Inkplate::display()
 
 void Inkplate::partialUpdate()
 {
+    return;
+    /*
     if (_displayMode == 1) return;
     if (_blockPartial == 1)
     {
@@ -232,6 +236,7 @@ void Inkplate::partialUpdate()
         }
         delayMicroseconds(230);
     }
+    */
     /*
         for (int k = 0; k < 1; k++)
         {
@@ -265,6 +270,7 @@ void Inkplate::partialUpdate()
         delayMicroseconds(230);
     }
     */
+    /*
     cleanFast(2, 2);
     cleanFast(3, 1);
     vscan_start();
@@ -274,6 +280,7 @@ void Inkplate::partialUpdate()
         *(D_memory_new + i) &= *(_partial + i);
         *(D_memory_new + i) |= (*(_partial + i));
     }
+    */
 }
 
 void Inkplate::drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char* _p, int16_t _w, int16_t _h)
@@ -402,8 +409,8 @@ void Inkplate::selectDisplayMode(uint8_t _mode)
 	if(_mode != _displayMode) {
 		_displayMode = _mode & 1;
 		memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
-		memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
-		memset(_pBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 4);
+		//memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
+		//memset(_pBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 4);
 		memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
 		_blockPartial = 1;
 	}
@@ -538,7 +545,7 @@ void Inkplate::vscan_start()
     CKV_SET;
     delayMicroseconds(18);
     CKV_CLEAR;
-    delayMicroseconds(0);
+    delayMicroseconds(1);
     CKV_SET;
     delayMicroseconds(18);
     CKV_CLEAR;
@@ -551,7 +558,7 @@ void Inkplate::hscan_start(uint32_t _d)
 {
     SPH_CLEAR;
     GPIOD -> BSRR = (_d) | CL;
-    GPIOD -> BSRR  = (DATA | CL) << 16;
+    GPIOD -> BSRR = (DATA | CL) << 16;
     SPH_SET;
     CKV_SET;
 }
@@ -585,14 +592,14 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
         data = B11111111;	  //Skip
     }
   
-    uint32_t _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);;
+    //uint32_t _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);;
     for (int k = 0; k < rep; k++)
     {
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; i++)
         {
-            hscan_start(_send);
-            GPIOD -> BSRR  = (_send) | CL;
+            hscan_start(data);
+            GPIOD -> BSRR  = (data) | CL;
             GPIOD -> BSRR  = CL << 16;
             for (int j = 0; j < (E_INK_WIDTH / 8) - 1; j++)
             {
@@ -601,7 +608,7 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
                 GPIOD -> BSRR = CL;
                 GPIOD -> BSRR = CL << 16;
             }
-            GPIOD -> BSRR = (_send) | CL;
+            GPIOD -> BSRR = (data) | CL;
             GPIOD -> BSRR = (DATA | CL) << 16;
             vscan_end();
         }
@@ -617,7 +624,7 @@ void Inkplate::pinsZstate()
     pinMode(PC10, INPUT);
     pinMode(PG3, INPUT);
     pinMode(PC12, INPUT);
-    pinMode(PE2, INPUT);
+    pinMode(PE4, INPUT);
     pinMode(PE3, INPUT);
 
     // DATA PINS
@@ -639,7 +646,7 @@ void Inkplate::pinsAsOutputs()
     pinMode(PC10, OUTPUT);
     pinMode(PG3, OUTPUT);
     pinMode(PC12, OUTPUT);
-    pinMode(PE2, OUTPUT);
+    pinMode(PE4, OUTPUT);
     pinMode(PE3, OUTPUT);
 
     // DATA PINS
@@ -657,11 +664,13 @@ void Inkplate::pinsAsOutputs()
 // Display content from RAM to display (1 bit per pixel,. monochrome picture).
 void Inkplate::display1b()
 {
+    /*
     for(int i = 0; i<(E_INK_HEIGHT * E_INK_WIDTH) / 8; i++)
     {
         *(D_memory_new + i) &= *(_partial + i);
         *(D_memory_new + i) |= (*(_partial + i));
     }
+    */
     uint32_t _pos;
     uint8_t data;
     uint8_t dram;
@@ -745,7 +754,7 @@ void Inkplate::display3b()
     cleanFast(0, 17);
     cleanFast(1, 17);
   
-    for (int k = 0; k < 8; k++)
+    for (int k = 0; k < 7; k++)
     {
         uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);
 	  
@@ -770,6 +779,7 @@ void Inkplate::display3b()
         }
         delayMicroseconds(230);
     }
+    cleanFast(2, 1);
     cleanFast(3, 1);
     vscan_start();
     einkOff();
