@@ -1,0 +1,6 @@
+STM32 FSMC Useful Links:
+ - https://www.youtube.com/watch?v=NUErX4dx2Tw
+ - https://github.com/hampussandberg/HexConnect/wiki/LCD-ER_TFTM070_5
+ - https://www.youtube.com/watch?v=Tg3s4WaVeSI
+ - https://www.programmersought.com/article/39904539968/
+ - https://stackoverflow.com/questions/41796128/how-to-setup-fast-stm32-f4-fsmc-to-control-a-display-on-the-stm32f4discovery-boa

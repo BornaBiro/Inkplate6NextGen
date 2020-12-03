@@ -749,10 +749,10 @@ void Inkplate::display1b()
 void Inkplate::display3b()
 {
     einkOn();
-    cleanFast(0, 17);
-    cleanFast(1, 17);
-    cleanFast(0, 17);
-    cleanFast(1, 17);
+    cleanFast(0, 20);
+    cleanFast(1, 20);
+    cleanFast(0, 20);
+    cleanFast(1, 20);
   
     for (int k = 0; k < 7; k++)
     {
