@@ -1,5 +1,5 @@
 /*************************************************** 
-This library is used for controling ED050SC3 epaper panel on e-radionica's Inkplate5 dev board (we are still working on it!).
+This library is used for controling ED060SC7 epaper panel on e-radionica's Inkplate6NextGen dev board (we are still working on it!).
 If you don't know what Inkplate is, check it out here: https://inkplate.io/
 
 Author: Borna Biro ( https://github.com/BornaBiro/ )
@@ -22,44 +22,6 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #include "Wire.h"
 #include "SPI.h"
 #include "SdFat.h"
-
-//NOT USED, MCP23017 related stuff.
-/*
-#define MCP23017_INT_ADDR		0x20
-#define MCP23017_EXT_ADDR		0x22
-#define MCP23017_INT_PORTA      0x00
-#define MCP23017_INT_PORTB      0x01
-#define MCP23017_INT_NO_MIRROR  false
-#define MCP23017_INT_MIRROR     true
-#define MCP23017_INT_PUSHPULL   false
-#define MCP23017_INT_OPENDRAIN  true
-#define MCP23017_INT_ACTLOW     false
-#define MCP23017_INT_ACTHIGH    true
-
-#define MCP23017_IODIRA 0x00
-#define MCP23017_IPOLA 0x02
-#define MCP23017_GPINTENA 0x04
-#define MCP23017_DEFVALA 0x06
-#define MCP23017_INTCONA 0x08
-#define MCP23017_IOCONA 0x0A
-#define MCP23017_GPPUA 0x0C
-#define MCP23017_INTFA 0x0E
-#define MCP23017_INTCAPA 0x10
-#define MCP23017_GPIOA 0x12
-#define MCP23017_OLATA 0x14
-
-#define MCP23017_IODIRB 0x01
-#define MCP23017_IPOLB 0x03
-#define MCP23017_GPINTENB 0x05
-#define MCP23017_DEFVALB 0x07
-#define MCP23017_INTCONB 0x09
-#define MCP23017_IOCONB 0x0B
-#define MCP23017_GPPUB 0x0D
-#define MCP23017_INTFB 0x0F
-#define MCP23017_INTCAPB 0x11
-#define MCP23017_GPIOB 0x13
-#define MCP23017_OLATB 0x15
-*/
 
 #define E_INK_WIDTH 		800
 #define E_INK_HEIGHT 		600
@@ -124,10 +86,12 @@ extern SdFat sd;
 
 class Inkplate : public Adafruit_GFX {
   public:
-    uint8_t* D_memory_new;
+    //uint8_t* D_memory_new;
     //uint8_t* _partial;
-    uint8_t* D_memory4Bit;
+    //uint8_t* D_memory4Bit;
     //uint8_t * _pBuffer;
+    uint8_t *imageBuffer;
+    uint8_t *partialBuffer;
     const uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101, B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
     const uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010, B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
     const uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101, B01111111, B01111101, B01110111, B01110101, B01011111, B01011101, B01010111, B01010101};
@@ -135,7 +99,24 @@ class Inkplate : public Adafruit_GFX {
     const uint8_t pixelMaskGLUT[2] = {B00001111, B11110000};
     const uint8_t discharge[16] = {B11111111, B11111100, B11110011, B11110000, B11001111, B11001100, B11000011, B11000000, B00111111, B00111100, B00110011, B00110000, B00001111, B00001100, B00000011, B00000000};
     //BLACK->WHITE
-    const uint8_t waveform3Bit[8][8] = {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 2, 0}, {0, 0, 0, 0, 0, 2, 2, 0}, {0, 0, 0, 0, 2, 2, 2, 0}, {0, 0, 0, 2, 2, 2, 2, 0}, {0, 0, 2, 2, 2, 2, 2, 0}, {0, 2, 2, 2, 2, 2, 2, 0}, {2, 2, 2, 2, 2, 2, 2, 0}};
+    const uint8_t waveform3Bit[16][16] = {
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, 
+        {0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, 
+    };
     uint8_t* GLUT;
     uint8_t* GLUT2;
 	
@@ -174,25 +155,13 @@ class Inkplate : public Adafruit_GFX {
     int8_t readTemperature();
     double readBattery();
 	void vscan_start();
-	void hscan_start(uint32_t _d = 0);
+	void hscan_start(uint8_t _d = 0);
 	void vscan_end();
     void cleanFast(uint8_t c, uint8_t rep);
     void pinsZstate();
     void pinsAsOutputs();
-	
-	//void pinModeMCP(uint8_t _pin, uint8_t _mode);
-	//void digitalWriteMCP(uint8_t _pin, uint8_t _state);
-	//uint8_t digitalReadMCP(uint8_t _pin);
-	//void setIntOutput(uint8_t intPort, uint8_t mirroring, uint8_t openDrain, uint8_t polarity);
-	//void setIntPin(uint8_t _pin, uint8_t _mode);
-	//void removeIntPin(uint8_t _pin);
-	//uint16_t getINT();
-	//uint16_t getINTstate();
-	//void setPorts(uint16_t _d);
-	//uint16_t getPorts();
 
   private:
-	//uint8_t mcpRegsInt[22], mcpRegsEx[22];
     int8_t _temperature;
     uint8_t _panelOn = 0;
     uint8_t _rotation = 0;
@@ -208,24 +177,6 @@ class Inkplate : public Adafruit_GFX {
 	void readBmpHeader(SdFile *_f, struct bitmapHeader *_h);
 	int drawMonochromeBitmap(SdFile *f, struct bitmapHeader bmpHeader, int x, int y);
 	int drawGrayscaleBitmap24(SdFile *f, struct bitmapHeader bmpHeader, int x, int y);
-	
-	//bool mcpBegin(uint8_t _addr, uint8_t* _r);
-	//void readMCPRegisters(uint8_t _addr, uint8_t *k);
-	//void readMCPRegisters(uint8_t _addr, uint8_t _regName, uint8_t *k, uint8_t _n);
-	//void readMCPRegister(uint8_t _addr, uint8_t _regName, uint8_t *k);
-	//void updateAllRegisters(uint8_t _addr, uint8_t *k);
-	//void updateRegister(uint8_t _addr, uint8_t _regName, uint8_t _d);
-	//void updateRegister(uint8_t _addr, uint8_t _regName, uint8_t *k, uint8_t _n);
-	//void pinModeInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin, uint8_t _mode);
-	//void digitalWriteInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin, uint8_t _state);
-	//uint8_t digitalReadInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin);
-	//void setIntOutputInternal(uint8_t _addr, uint8_t* _r, uint8_t intPort, uint8_t mirroring, uint8_t openDrain, uint8_t polarity);
-	//void setIntPinInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin, uint8_t _mode);
-	//void removeIntPinInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin);
-	//uint16_t getINTInternal(uint8_t _addr, uint8_t* _r);
-	//uint16_t getINTstateInternal(uint8_t _addr, uint8_t* _r);
-	//void setPortsInternal(uint8_t _addr, uint8_t* _r, uint16_t _d);
-	//uint16_t getPortsInternal(uint8_t _addr, uint8_t* _r);
 };
 
 #endif

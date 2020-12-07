@@ -30,15 +30,6 @@ void Inkplate::begin(void)
     Wire.setSDA(TPS_SDA);
     Wire.setSCL(TPS_SCL);
     Wire.begin();
-    //memset(mcpRegsInt, 0, 22);
-    //memset(mcpRegsEx, 0, 22);
-    //mcpBegin(MCP23017_INT_ADDR, mcpRegsInt);
-    //mcpBegin(MCP23017_EXT_ADDR, mcpRegsEx);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, VCOM, OUTPUT);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, PWRUP, OUTPUT);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, WAKEUP, OUTPUT);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, GPIO0_ENABLE, OUTPUT);
-    //digitalWriteInternal(MCP23017_INT_ADDR, mcpRegsInt, GPIO0_ENABLE, HIGH);
   
     WAKEUP_SET;
     delay(1);
@@ -51,22 +42,6 @@ void Inkplate::begin(void)
     Wire.endTransmission();
     delay(1);
     WAKEUP_CLEAR;
-  
-    // Set all pins of seconds I/O expander to outputs, low.
-    // For some reason, it draw more current in deep sleep when pins are set as inputs...
-    //for(int i = 0; i < 15; i++)
-    //{
-    //    pinModeInternal(MCP23017_EXT_ADDR, mcpRegsInt, i, OUTPUT);
-    //    digitalWriteInternal(MCP23017_EXT_ADDR, mcpRegsInt, i, LOW);
-    //}
-  
-    // For same reason, unused pins of first I/O expander have to be also set as outputs, low.
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 13, OUTPUT);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 14, OUTPUT);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 15, OUTPUT);
-    //digitalWriteInternal(MCP23017_INT_ADDR, mcpRegsInt, 13, LOW);
-    //digitalWriteInternal(MCP23017_INT_ADDR, mcpRegsInt, 14, LOW);
-    //digitalWriteInternal(MCP23017_INT_ADDR, mcpRegsInt, 15, LOW);
     
     pinMode(PE9, OUTPUT);
     pinMode(PG12, OUTPUT);
@@ -91,21 +66,14 @@ void Inkplate::begin(void)
     pinMode(PD6, OUTPUT);
     pinMode(PD7, OUTPUT); //D7
   
-    // TOUCHPAD PINS
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 10, INPUT);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 11, INPUT);
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 12, INPUT);
-  
-    // Battery voltage Switch MOSFET
-    //pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 9, OUTPUT);
-  
-    D_memory_new = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
+    //D_memory_new = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
     //_partial = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
     //_pBuffer = (uint8_t*) ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 4);
-    D_memory4Bit = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
-    GLUT = (uint8_t*)malloc(256 * 8 * sizeof(uint32_t));
-    GLUT2 = (uint8_t*)malloc(256 * 8 * sizeof(uint32_t));
-    if (D_memory_new == NULL  || D_memory4Bit == NULL || GLUT == NULL || GLUT2 == NULL)
+    //D_memory4Bit = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
+    imageBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
+    GLUT = (uint8_t*)malloc(256 * 16 * sizeof(uint8_t));
+    GLUT2 = (uint8_t*)malloc(256 * 16 * sizeof(uint8_t));
+    if (imageBuffer == NULL || GLUT == NULL || GLUT2 == NULL)
     {
         Serial.print("Memory alloc. fail");
         do
@@ -114,15 +82,16 @@ void Inkplate::begin(void)
         }
         while (true);
     }
-    memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
+    //memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
     //memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
     //memset(_pBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 4);
-    memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
+    //memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
+    memset(imageBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
   
-    for (int j = 0; j < 8; ++j) {
+    for (int j = 0; j < 16; ++j) {
         for (uint32_t i = 0; i < 256; ++i) {
-        GLUT[j*256+i] = (waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i >> 4) & 0x07][j]);
-        GLUT2[j*256+i] = ((waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i >> 4) & 0x07][j])) << 4;
+        GLUT[j*256+i] = (waveform3Bit[i & 0x0f][j] << 2) | (waveform3Bit[(i >> 4) & 0x0f][j]);
+        GLUT2[j*256+i] = ((waveform3Bit[i & 0x0f][j] << 2) | (waveform3Bit[(i >> 4) & 0x0f][j])) << 4;
         }
     }
   
@@ -156,15 +125,19 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color)
         int x_sub = x0 % 8;
         //uint8_t temp = *(_partial + (E_INK_WIDTH/8 * y0) + x);
         //*(_partial + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
-        uint8_t temp = *(D_memory_new + (E_INK_WIDTH/8 * y0) + x);
-        *(D_memory_new + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
+        //uint8_t temp = *(D_memory_new + (E_INK_WIDTH/8 * y0) + x);
+        //*(D_memory_new + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
+        uint8_t temp = *(imageBuffer + (E_INK_WIDTH/8 * y0) + x);
+        *(imageBuffer + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
     } else {
-        color &= 7;
+        color &= 0x0f;
         int x = x0 / 2;
         int x_sub = x0 % 2;
         uint8_t temp;
-        temp = *(D_memory4Bit + E_INK_WIDTH/2 * y0 + x);
-        *(D_memory4Bit + E_INK_WIDTH/2 * y0 + x) = pixelMaskGLUT[x_sub] & temp | (x_sub ? color : color << 4);
+        //temp = *(D_memory4Bit + E_INK_WIDTH/2 * y0 + x);
+        //*(D_memory4Bit + E_INK_WIDTH/2 * y0 + x) = pixelMaskGLUT[x_sub] & temp | (x_sub ? color : color << 4);
+        temp = *(imageBuffer + E_INK_WIDTH/2 * y0 + x);
+        *(imageBuffer + E_INK_WIDTH/2 * y0 + x) = pixelMaskGLUT[x_sub] & temp | (x_sub ? color : color << 4);
     }
 }
 
@@ -172,9 +145,9 @@ void Inkplate::clearDisplay()
 {
     // Clear 1 bit per pixel display buffer
     //if (_displayMode == 0) memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
-    if (_displayMode == 0) memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
+    if (_displayMode == 0) memset(imageBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
     // Clear 3 bit per pixel display buffer
-    if (_displayMode == 1) memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
+    if (_displayMode == 1) memset(imageBuffer, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
 }
 
 // Function that displays content from RAM to screen
@@ -294,11 +267,11 @@ void Inkplate::drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char* _p, i
     {
         for (j = 0; j < xSize - 1; j++)
         {
-            drawPixel((j * 2) + _x, i + _y, (*(_p + xSize * (i) + j) >> 4) >> 1);
-            drawPixel((j * 2) + 1 + _x, i + _y, (*(_p + xSize * (i) + j) & 0xff) >> 1);
+            drawPixel((j * 2) + _x, i + _y, (*(_p + xSize * (i) + j) >> 4));
+            drawPixel((j * 2) + 1 + _x, i + _y, (*(_p + xSize * (i) + j) & 0xff));
         }
-        drawPixel((j * 2) + _x, i + _y, (*(_p + xSize * (i) + j) >> 4)>>1);
-        if (_rem == 0) drawPixel((j * 2) + 1 + _x, i + _y, (*(_p + xSize * (i) + j) & 0xff) >> 1);
+        drawPixel((j * 2) + _x, i + _y, (*(_p + xSize * (i) + j) >> 4));
+        if (_rem == 0) drawPixel((j * 2) + 1 + _x, i + _y, (*(_p + xSize * (i) + j) & 0xff));
     }
 }
 
@@ -406,14 +379,18 @@ uint8_t Inkplate::readPowerGood()
 
 void Inkplate::selectDisplayMode(uint8_t _mode)
 {
-	if(_mode != _displayMode) {
-		_displayMode = _mode & 1;
-		memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
+	//if(_mode != _displayMode) {
+		//_displayMode = _mode & 1;
+		//memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
 		//memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
 		//memset(_pBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 4);
-		memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
-		_blockPartial = 1;
-	}
+		//memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
+		//_blockPartial = 1;
+	//}
+    _displayMode = _mode & 1;
+    _blockPartial = 1;
+    if (_displayMode == 0) memset(imageBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
+    if (_displayMode == 1) memset(imageBuffer, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
 }
 
 uint8_t Inkplate::getDisplayMode()
@@ -482,7 +459,7 @@ void Inkplate::setPanelState(uint8_t state)
 
 uint8_t Inkplate::readTouchpad(uint8_t _pad)
 {
-    //return digitalReadInternal(MCP23017_INT_ADDR, mcpRegsInt, (_pad&3)+10);
+    return 0;
 }
 
 int8_t Inkplate::readTemperature()
@@ -517,13 +494,6 @@ int8_t Inkplate::readTemperature()
 
 double Inkplate::readBattery()
 {
-    //digitalWriteInternal(MCP23017_INT_ADDR, mcpRegsInt, 9, HIGH);
-    //delay(1);
-    //int adc = analogRead(35);
-    //digitalWriteInternal(MCP23017_INT_ADDR, mcpRegsInt, 9, LOW);
-    // Calculate the voltage using the following formula
-    // 1.1V is internal ADC reference of ESP32, 3.548133892 is 11dB in linear scale (Analog signal is attenuated by 11dB before ESP32 ADC input)
-    //return (double(adc) / 4095 * 1.1 * 3.548133892 * 2);
     return -1;
 }
 
@@ -554,7 +524,7 @@ void Inkplate::vscan_start()
     delayMicroseconds(18);
 }
 
-void Inkplate::hscan_start(uint32_t _d)
+void Inkplate::hscan_start(uint8_t _d)
 {
     SPH_CLEAR;
     GPIOD -> BSRR = (_d) | CL;
@@ -567,7 +537,10 @@ void Inkplate::vscan_end() {
     CKV_CLEAR;
     LE_SET;
     LE_CLEAR;
-    delayMicroseconds(1);
+    //delayMicroseconds(1);
+    int32_t start  = dwt_getCycles();
+    int32_t cycles = int32_t(0.4 * (SystemCoreClock / 1000000));
+    while ((int32_t)dwt_getCycles() - start < cycles);
 }
 
 // Clears content from epaper diplay as fast as ESP32 can.
@@ -685,7 +658,8 @@ void Inkplate::display1b()
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; i++)
         {
-        dram = ~(*(D_memory_new + _pos));
+        //dram = ~(*(D_memory_new + _pos));
+        dram = ~(*(imageBuffer + _pos));
         data = LUTW[(dram >> 4) & 0x0F];
         hscan_start(data);
         data = LUTW[dram & 0x0F];
@@ -694,7 +668,8 @@ void Inkplate::display1b()
         _pos--;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); j++)
         {
-            dram = ~(*(D_memory_new + _pos));
+            //dram = ~(*(D_memory_new + _pos));
+            dram = ~(*(imageBuffer + _pos));
             data = LUTW[(dram >> 4)&0x0F];
             GPIOD -> BSRR = data | CL;
             GPIOD -> BSRR = (DATA | CL) << 16;
@@ -714,7 +689,8 @@ void Inkplate::display1b()
     vscan_start();
     for (int i = 0; i < E_INK_HEIGHT; i++)
     {
-	  dram = *(D_memory_new + _pos);
+	  //dram = *(D_memory_new + _pos);
+      dram = *(imageBuffer + _pos);
       data = LUT2[(dram >> 4) & 0x0F];
 	  hscan_start(data);
 	  data = LUT2[dram & 0x0F];
@@ -723,7 +699,8 @@ void Inkplate::display1b()
 	  _pos--;
       for (int j = 0; j < ((E_INK_WIDTH / 8)-1); j++)
       {
-		dram = *(D_memory_new + _pos);
+		//dram = *(D_memory_new + _pos);
+        dram = *(imageBuffer + _pos);
         data = LUT2[(dram >> 4) & 0x0F];
 		GPIOD -> BSRR = (data) | CL;
         GPIOD -> BSRR = (DATA | CL) << 16;
@@ -754,10 +731,10 @@ void Inkplate::display3b()
     cleanFast(0, 20);
     cleanFast(1, 20);
   
-    for (int k = 0; k < 7; k++)
+    for (int k = 0; k < 16; k++)
     {
-        uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);
-	  
+        //uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);
+        uint8_t *dp = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH/2);
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; i++)
         {
@@ -865,253 +842,3 @@ int Inkplate::drawGrayscaleBitmap24(SdFile *f, struct bitmapHeader bmpHeader, in
   f->close();
   return 1;
 }
-
-
-// MOT USED ON STM32. STM32 HAS ENOUGH PINS! COMMENT ALL!!!
-/*
-//----------------------------MCP23017 functions----------------------------
-bool Inkplate::mcpBegin(uint8_t _addr, uint8_t* _r)
-{
-    Wire.beginTransmission(_addr);
-    int error = Wire.endTransmission();
-    if (error) return false;
-    readMCPRegisters(_addr, _r);
-    _r[0] = 0xff;
-    _r[1] = 0xff;
-    updateAllRegisters(_addr, _r);
-    return true;
-}
-
-void Inkplate::readMCPRegisters(uint8_t _addr, uint8_t *k)
-{
-    Wire.beginTransmission(_addr);
-    Wire.write(0x00);
-    Wire.endTransmission();
-    Wire.requestFrom(_addr, (uint8_t)22);
-    for (int i = 0; i < 22; i++)
-    {
-        k[i] = Wire.read();
-    }
-}
-
-void Inkplate::readMCPRegisters(uint8_t _addr, uint8_t _regName, uint8_t *k, uint8_t _n)
-{
-    Wire.beginTransmission(_addr);
-    Wire.write(_regName);
-    Wire.endTransmission();
-
-    Wire.requestFrom(_addr, _n);
-    for (int i = 0; i < _n; i++)
-    {
-        k[_regName + i] = Wire.read();
-    }
-}
-
-void Inkplate::readMCPRegister(uint8_t _addr, uint8_t _regName, uint8_t *k)
-{
-    Wire.beginTransmission(_addr);
-    Wire.write(_regName);
-    Wire.endTransmission();
-    Wire.requestFrom(_addr, (uint8_t)1);
-    k[_regName] = Wire.read();
-}
-
-void Inkplate::updateAllRegisters(uint8_t _addr, uint8_t *k)
-{
-    Wire.beginTransmission(_addr);
-    Wire.write(0x00);
-    for (int i = 0; i < 22; i++)
-    {
-        Wire.write(k[i]);
-    }
-    Wire.endTransmission();
-}
-
-void Inkplate::updateRegister(uint8_t _addr, uint8_t _regName, uint8_t _d)
-{
-    Wire.beginTransmission(_addr);
-    Wire.write(_regName);
-    Wire.write(_d);
-    Wire.endTransmission();
-}
-
-void Inkplate::updateRegister(uint8_t _addr, uint8_t _regName, uint8_t *k, uint8_t _n)
-{
-    Wire.beginTransmission(_addr);
-    Wire.write(_regName);
-    for (int i = 0; i < _n; i++) {
-        Wire.write(k[_regName + i]);
-    }
-    Wire.endTransmission();
-}
-
-void Inkplate::pinModeInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin, uint8_t _mode)
-{
-    uint8_t _port = (_pin / 8) & 1;
-    uint8_t _p = _pin % 8;
-
-    switch (_mode)
-    {
-    case INPUT:
-        _r[MCP23017_IODIRA + _port] |= 1 << _p;   //Set it to input
-        _r[MCP23017_GPPUA + _port] &= ~(1 << _p); //Disable pullup on that pin
-        updateRegister(_addr, MCP23017_IODIRA + _port, _r[MCP23017_IODIRA + _port]);
-        updateRegister(_addr, MCP23017_GPPUA + _port, _r[MCP23017_GPPUA + _port]);
-        break;
-
-    case INPUT_PULLUP:
-        _r[MCP23017_IODIRA + _port] |= 1 << _p;   //Set it to input
-        _r[MCP23017_GPPUA + _port] |= 1 << _p;    //Enable pullup on that pin
-        updateRegister(_addr, MCP23017_IODIRA + _port, _r[MCP23017_IODIRA + _port]);
-        updateRegister(_addr, MCP23017_GPPUA + _port, _r[MCP23017_GPPUA + _port]);
-        break;
-
-    case OUTPUT:
-        _r[MCP23017_IODIRA + _port] &= ~(1 << _p); //Set it to output
-        _r[MCP23017_GPPUA + _port] &= ~(1 << _p); //Disable pullup on that pin
-        updateRegister(_addr, MCP23017_IODIRA + _port, _r[MCP23017_IODIRA + _port]);
-        updateRegister(_addr, MCP23017_GPPUA + _port, _r[MCP23017_GPPUA + _port]);
-        break;
-    }
-}
-
-void Inkplate::digitalWriteInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin, uint8_t _state)
-{
-    uint8_t _port = (_pin / 8) & 1;
-    uint8_t _p = _pin % 8;
-
-    if (_r[MCP23017_IODIRA + _port] & (1 << _p)) return; //Check if the pin is set as an output
-    _state ? (_r[MCP23017_GPIOA + _port] |= (1 << _p)) : (_r[MCP23017_GPIOA + _port] &= ~(1 << _p));
-    updateRegister(_addr, MCP23017_GPIOA + _port, _r[MCP23017_GPIOA + _port]);
-}
-
-uint8_t Inkplate::digitalReadInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin)
-{
-    uint8_t _port = (_pin / 8) & 1;
-    uint8_t _p = _pin % 8;
-    readMCPRegister(_addr, MCP23017_GPIOA + _port, _r);
-    return (_r[MCP23017_GPIOA + _port] & (1 << _p)) ? HIGH : LOW;
-}
-
-void Inkplate::setIntOutputInternal(uint8_t _addr, uint8_t* _r, uint8_t intPort, uint8_t mirroring, uint8_t openDrain, uint8_t polarity)
-{
-    intPort &= 1;
-    mirroring &= 1;
-    openDrain &= 1;
-    polarity &= 1;
-    _r[MCP23017_IOCONA + intPort] = (_r[MCP23017_IOCONA + intPort] & ~(1 << 6)) | (mirroring << 6);
-    _r[MCP23017_IOCONA + intPort] = (_r[MCP23017_IOCONA + intPort] & ~(1 << 2)) | (openDrain << 2);
-    _r[MCP23017_IOCONA + intPort] = (_r[MCP23017_IOCONA + intPort] & ~(1 << 1)) | (polarity << 1);
-    updateRegister(_addr, MCP23017_IOCONA + intPort, _r[MCP23017_IOCONA + intPort]);
-}
-
-void Inkplate::setIntPinInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin, uint8_t _mode)
-{
-    uint8_t _port = (_pin / 8) & 1;
-    uint8_t _p = _pin % 8;
-
-    switch (_mode)
-    {
-    case CHANGE:
-        _r[MCP23017_INTCONA + _port] &= ~(1 << _p);
-        break;
-
-    case FALLING:
-        _r[MCP23017_INTCONA + _port] |= (1 << _p);
-        _r[MCP23017_DEFVALA + _port] |= (1 << _p);
-        break;
-
-    case RISING:
-        _r[MCP23017_INTCONA + _port] |= (1 << _p);
-        _r[MCP23017_DEFVALA + _port] &= ~(1 << _p);
-        break;
-    }
-    _r[MCP23017_GPINTENA + _port] |= (1 << _p);
-    updateRegister(_addr, MCP23017_GPINTENA, _r, 6);
-}
-
-void Inkplate::removeIntPinInternal(uint8_t _addr, uint8_t* _r, uint8_t _pin)
-{
-    uint8_t _port = (_pin / 8) & 1;
-    uint8_t _p = _pin % 8;
-    _r[MCP23017_GPINTENA + _port] &= ~(1 << _p);
-    updateRegister(_addr, MCP23017_GPINTENA, _r, 2);
-}
-
-uint16_t Inkplate::getINTInternal(uint8_t _addr, uint8_t* _r)
-{
-    readMCPRegisters(_addr, MCP23017_INTFA, _r, 2);
-    return ((_r[MCP23017_INTFB] << 8) | _r[MCP23017_INTFA]);
-}
-
-uint16_t Inkplate::getINTstateInternal(uint8_t _addr, uint8_t* _r)
-{
-    readMCPRegisters(_addr, MCP23017_INTCAPA, _r, 2);
-    return ((_r[MCP23017_INTCAPB] << 8) | _r[MCP23017_INTCAPA]);
-}
-
-void Inkplate::setPortsInternal(uint8_t _addr, uint8_t* _r, uint16_t _d)
-{
-    _r[MCP23017_GPIOA] = _d & 0xff;
-    _r[MCP23017_GPIOB] = (_d >> 8) & 0xff;
-    updateRegister(_addr, MCP23017_GPIOA, _r, 2);
-}
-
-uint16_t Inkplate::getPortsInternal(uint8_t _addr, uint8_t* _r)
-{
-    readMCPRegisters(_addr, MCP23017_GPIOA, _r, 2);
-    return ((_r[MCP23017_GPIOB] << 8) | (_r[MCP23017_GPIOA]));
-}
-
-//---------------------Functions that are used by user (visible outside this library)----------------------------
-void Inkplate::pinModeMCP(uint8_t _pin, uint8_t _mode)
-{
-	pinModeInternal(MCP23017_EXT_ADDR, mcpRegsEx, _pin, _mode);
-}
-
-void Inkplate::digitalWriteMCP(uint8_t _pin, uint8_t _state)
-{
-	digitalWriteInternal(MCP23017_EXT_ADDR, mcpRegsEx, _pin, _state);
-}
-
-uint8_t Inkplate::digitalReadMCP(uint8_t _pin)
-{
-	return digitalReadInternal(MCP23017_EXT_ADDR, mcpRegsEx, _pin);
-}
-
-void Inkplate::setIntOutput(uint8_t intPort, uint8_t mirroring, uint8_t openDrain, uint8_t polarity)
-{
-	setIntOutputInternal(MCP23017_EXT_ADDR, mcpRegsEx, intPort, mirroring, openDrain, polarity);
-}
-
-void Inkplate::setIntPin(uint8_t _pin, uint8_t _mode)
-{
-	setIntPinInternal(MCP23017_EXT_ADDR, mcpRegsEx, _pin, _mode);
-}
-
-void Inkplate::removeIntPin(uint8_t _pin)
-{
-	removeIntPinInternal(MCP23017_EXT_ADDR, mcpRegsEx, _pin);
-}
-
-uint16_t Inkplate::getINT()
-{
-	return getINTInternal(MCP23017_EXT_ADDR, mcpRegsEx);
-}
-
-uint16_t Inkplate::getINTstate()
-{
-	return getINTstateInternal(MCP23017_EXT_ADDR, mcpRegsEx);
-}
-
-void Inkplate::setPorts(uint16_t _d)
-{
-	setPortsInternal(MCP23017_EXT_ADDR, mcpRegsEx, _d);
-}
-
-uint16_t Inkplate::getPorts()
-{
-	return getPortsInternal(MCP23017_EXT_ADDR, mcpRegsEx);
-}
-*/
-// --------------------------------------------END OF MCP FUNCTIONS--------------------------------------------
