@@ -298,11 +298,15 @@ void Inkplate::einkOn()
     WAKEUP_SET;
     delay(1);
     PWRUP_SET;
-
+    delay(1);
     // Enable all rails
     Wire.beginTransmission(0x48);
     Wire.write(0x01);
     Wire.write(B00111111);
+    Wire.endTransmission();
+    Wire.beginTransmission(0x48);
+    Wire.write(0x03);
+    Wire.write(193); // VCOM in mV
     Wire.endTransmission();
     pinsAsOutputs();
     LE_CLEAR;
@@ -603,38 +607,29 @@ void Inkplate::pinsAsOutputs()
 // Display content from RAM to display (1 bit per pixel,. monochrome picture).
 void Inkplate::display1b()
 {
-    //Full update? Copy everything in screen buffer before refresh!
-    for(int i = 0; i<(E_INK_HEIGHT * E_INK_WIDTH) / 8; i++)
-    {
-        *(imageBuffer + i) &= *(partialBuffer + i);
-        *(imageBuffer + i) |= (*(partialBuffer + i));
-    }
-    
     uint8_t *_pos;
     uint8_t data;
     einkOn();
-    cleanFast(0, 20);
-    cleanFast(1, 20);
-    cleanFast(0, 20);
-    cleanFast(1, 20);
-      for (int k = 0; k < 16; ++k)
-      {
+    cleanFast(0, 5);
+    
+    for (int k = 0; k < 5; ++k)
+    {
         _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; ++i)
         {
-        data = LUTW[(~(*_pos) >> 4) & 0x0F];
+        data = LUT2[(~(*_pos) >> 4) & 0x0F];
         hscan_start(data);
-        data = LUTW[~(*_pos) & 0x0F];
+        data = LUT2[~(*_pos) & 0x0F];
         GPIOD -> BSRR = data | CL;
         GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
-            data = LUTW[(~(*_pos) >> 4)&0x0F];
+            data = LUT2[(~(*_pos) >> 4)&0x0F];
             GPIOD -> BSRR = data | CL;
             GPIOD -> BSRR = (DATA | CL) << 16;
-            data = LUTW[~(*_pos) & 0x0F];
+            data = LUT2[~(*_pos) & 0x0F];
             GPIOD -> BSRR = data | CL;
             GPIOD -> BSRR = (DATA | CL) << 16;
             --_pos;
@@ -645,32 +640,86 @@ void Inkplate::display1b()
         }
         delayMicroseconds(230);
     }
-  
-    _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8);
-    vscan_start();
-    for (int i = 0; i < E_INK_HEIGHT; ++i)
+    cleanFast(1, 5);
+    cleanFast(2, 2);
+    
+    //Full update? Copy everything in screen buffer before refresh!
+    for(int i = 0; i<(E_INK_HEIGHT * E_INK_WIDTH) / 8; i++)
     {
-      data = LUT2[((*_pos) >> 4) & 0x0F];
-	  hscan_start(data);
-	  data = LUT2[(*_pos) & 0x0F];
-	  GPIOD -> BSRR = (data) | CL;
-      GPIOD -> BSRR = (DATA | CL) << 16;
-	  _pos--;
-      for (int j = 0; j < ((E_INK_WIDTH / 8)-1); ++j)
-      {
-        data = LUT2[((*_pos) >> 4) & 0x0F];
-		GPIOD -> BSRR = (data) | CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
-        data = LUT2[(*_pos) & 0x0F];
-		GPIOD -> BSRR = (data) | CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
-		_pos--;
-      }
-	  GPIOD -> BSRR = CL;
-      GPIOD -> BSRR = (DATA | CL) << 16;
-	  vscan_end();
+        *(imageBuffer + i) &= *(partialBuffer + i);
+        *(imageBuffer + i) |= (*(partialBuffer + i));
     }
-    delayMicroseconds(230);
+    
+    /*
+    cleanFast(0, 20);
+    cleanFast(2, 2);
+    cleanFast(1, 20);
+    cleanFast(2, 2);
+    cleanFast(0, 20);
+    cleanFast(2, 2);
+    cleanFast(1, 20);
+    cleanFast(2, 2);
+    */
+    
+    for (int k = 0; k < 20; ++k)
+    {
+        _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
+        vscan_start();
+        for (int i = 0; i < E_INK_HEIGHT; ++i)
+        {
+        data = LUT2[(~(*_pos) >> 4) & 0x0F];
+        hscan_start(data);
+        data = LUT2[~(*_pos) & 0x0F];
+        GPIOD -> BSRR = data | CL;
+        GPIOD -> BSRR = (DATA | CL) << 16;
+        --_pos;
+        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
+        {
+            data = LUT2[(~(*_pos) >> 4)&0x0F];
+            GPIOD -> BSRR = data | CL;
+            GPIOD -> BSRR = (DATA | CL) << 16;
+            data = LUT2[~(*_pos) & 0x0F];
+            GPIOD -> BSRR = data | CL;
+            GPIOD -> BSRR = (DATA | CL) << 16;
+            --_pos;
+        }
+        GPIOD -> BSRR = CL;
+        GPIOD -> BSRR = (DATA | CL) << 16;
+        vscan_end();
+        }
+        delayMicroseconds(230);
+    }
+    
+    //cleanFast(1, 5);
+    cleanFast(2, 2);
+    for (int k = 0; k < 20; ++k)
+      {
+        _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
+        vscan_start();
+        for (int i = 0; i < E_INK_HEIGHT; ++i)
+        {
+        data = LUT2[((*_pos) >> 4) & 0x0F];
+        hscan_start(data);
+        data = LUT2[(*_pos) & 0x0F];
+        GPIOD -> BSRR = data | CL;
+        GPIOD -> BSRR = (DATA | CL) << 16;
+        --_pos;
+        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
+        {
+            data = LUT2[((*_pos) >> 4)&0x0F];
+            GPIOD -> BSRR = data | CL;
+            GPIOD -> BSRR = (DATA | CL) << 16;
+            data = LUT2[(*_pos) & 0x0F];
+            GPIOD -> BSRR = data | CL;
+            GPIOD -> BSRR = (DATA | CL) << 16;
+            --_pos;
+        }
+        GPIOD -> BSRR = CL;
+        GPIOD -> BSRR = (DATA | CL) << 16;
+        vscan_end();
+        }
+        delayMicroseconds(230);
+    }
     
     cleanFast(2, 2);
     cleanFast(3, 1);
