@@ -71,9 +71,10 @@ void Inkplate::begin(void)
     //_pBuffer = (uint8_t*) ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 4);
     //D_memory4Bit = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
     imageBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
+    partialBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
     GLUT = (uint8_t*)malloc(256 * 16 * sizeof(uint8_t));
     GLUT2 = (uint8_t*)malloc(256 * 16 * sizeof(uint8_t));
-    if (imageBuffer == NULL || GLUT == NULL || GLUT2 == NULL)
+    if (imageBuffer == NULL || partialBuffer == NULL || GLUT == NULL || GLUT2 == NULL)
     {
         Serial.print("Memory alloc. fail");
         do
@@ -87,6 +88,7 @@ void Inkplate::begin(void)
     //memset(_pBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 4);
     //memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
     memset(imageBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
+    memset(partialBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
   
     for (int j = 0; j < 16; ++j) {
         for (uint32_t i = 0; i < 256; ++i) {
@@ -127,8 +129,12 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color)
         //*(_partial + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
         //uint8_t temp = *(D_memory_new + (E_INK_WIDTH/8 * y0) + x);
         //*(D_memory_new + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
-        uint8_t temp = *(imageBuffer + (E_INK_WIDTH/8 * y0) + x);
-        *(imageBuffer + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
+        
+        
+        //uint8_t temp = *(imageBuffer + (E_INK_WIDTH/8 * y0) + x);
+        //*(imageBuffer + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
+        uint8_t temp = *(partialBuffer + (E_INK_WIDTH/8 * y0) + x);
+        *(partialBuffer + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
     } else {
         color &= 0x0f;
         int x = x0 / 2;
@@ -145,7 +151,7 @@ void Inkplate::clearDisplay()
 {
     // Clear 1 bit per pixel display buffer
     //if (_displayMode == 0) memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
-    if (_displayMode == 0) memset(imageBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
+    if (_displayMode == 0) memset(partialBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
     // Clear 3 bit per pixel display buffer
     if (_displayMode == 1) memset(imageBuffer, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
 }
@@ -157,103 +163,63 @@ void Inkplate::display()
     if (_displayMode == 1) display3b();
 }
 
-void Inkplate::partialUpdate()
+void Inkplate::partialUpdate(uint8_t _leaveOn)
 {
-    return;
-    /*
-    if (_displayMode == 1) return;
+    if (_displayMode != 0) return;
     if (_blockPartial == 1)
     {
         display1b();
         return;
     }
     
-    uint32_t _pos = (E_INK_WIDTH * E_INK_HEIGHT / 8) - 1;
-    uint8_t data;
-    uint8_t diffw, diffb;
-    uint32_t n = (E_INK_WIDTH * E_INK_HEIGHT / 4) - 1;
-    uint8_t dram;
-  
-    for (int i = 0; i < E_INK_HEIGHT; i++) {
-        for (int j = 0; j < E_INK_WIDTH / 8; j++) {
-            diffw = ((*(D_memory_new + _pos))^(*(_partial + _pos)))&(~(*(_partial + _pos)));
-            diffb = ((*(D_memory_new + _pos))^(*(_partial + _pos)))&((*(_partial + _pos)));
-            _pos--;
-            *(_pBuffer + n) = LUTW[diffw>>4] & (LUTB[diffb>>4]);
-            n--;
-            *(_pBuffer + n) = LUTW[diffw&0x0F] & (LUTB[diffb&0x0F]);
-            n--;
-        }
-    }	  
-   
     einkOn();
-    for (int k = 0; k < 5; k++)
+    uint8_t *_pos;
+    uint8_t *_partialPos;
+    uint8_t diffw;
+    uint8_t diffb;
+    for (int k = 0; k < 10; ++k)
     {
+        uint8_t *_pos = imageBuffer + (E_INK_WIDTH * E_INK_HEIGHT / 8) - 1;
+        uint8_t *_partialPos = partialBuffer  + (E_INK_WIDTH * E_INK_HEIGHT / 8) - 1;
         vscan_start();
-        n = (E_INK_WIDTH * E_INK_HEIGHT / 4) - 1;
-        for (int i = 0; i < E_INK_HEIGHT; i++)
+        for (int i = 0; i < 600; ++i)
         {
-            data = *(_pBuffer + n);
-            hscan_start(data);
-            n--;
-        for (int j = 0; j < ((E_INK_WIDTH / 4) - 1); j++)
-        {
-            data = *(_pBuffer + n);
-            GPIOD -> BSRR = (data) | CL;
-            GPIOD -> BSRR  = (DATA | CL) << 16;
-            n--;
-        }
-        GPIOD -> BSRR = CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
-        vscan_end();
-        }
-        delayMicroseconds(230);
-    }
-    */
-    /*
-        for (int k = 0; k < 1; k++)
-        {
-            vscan_start();
-            _pos = 59999;
-            for (int i = 0; i < 600; i++) {
-            data = discharge[(*(D_memory_new + _pos) >> 4)];
-            _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);
-            hscan_start(_send);
-            data = discharge[*(D_memory_new + _pos) & 0x0F];
-            _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);
-            GPIO.out_w1ts = (_send) | CL;
-            GPIO.out_w1tc = DATA | CL;
-            _pos--;
-            for (int j = 0; j < 99; j++)
+            diffw = *(_pos) & ~*(_partialPos);                      //Calculate differences in white pixels
+            diffb = ~*(_pos) & *(_partialPos);                      //Calculate differences in black pixels    
+            --_pos;                                                 //Move address pointers
+            --_partialPos;
+            hscan_start(LUTW[diffw >> 4] & (LUTB[diffb >> 4]));                     //Start sending first pixel byte to panel
+            GPIOD -> BSRR  = (LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F])) | CL;      //Followed by second one
+            GPIOD -> BSRR  = (CL | DATA) << 16;                                     //Clock it!
+            for (int j = 0; j < 99; ++j)                                            //Now do all that for whole row
             {
-                data = discharge[(*(D_memory_new + _pos) >> 4)];
-                _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);
-                GPIO.out_w1ts = (_send) | CL;
-                GPIO.out_w1tc = DATA | CL;
-                data = discharge[*(D_memory_new + _pos) & 0x0F];
-                _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);
-                GPIO.out_w1ts = (_send) | CL;
-                GPIO.out_w1tc = DATA | CL;
-                _pos--;
+                diffw = *(_pos) & ~*(_partialPos);
+                diffb = ~*(_pos) & *(_partialPos);
+                --_pos;
+                --_partialPos;
+                GPIOD -> BSRR = LUTW[diffw >> 4] & (LUTB[diffb >> 4]) | CL;          //First 4 pixels
+                GPIOD -> BSRR = (CL | DATA) << 16;
+                GPIOD -> BSRR = LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F]) | CL;      //Last for pixels
+                GPIOD -> BSRR = (CL | DATA) << 16;
             }
-            GPIO.out_w1ts = (_send) | CL;
-            GPIO.out_w1tc = DATA | CL;
-            vscan_end();
+            GPIOD -> BSRR = CL;                                                 //Clock last bit of data
+            GPIOD -> BSRR = (DATA | CL) << 16;
+            vscan_end();                                                        //Vrite one row to panel
         }
-        delayMicroseconds(230);
+        delayMicroseconds(230);                                                 //Wait 230uS before new frame
     }
-    */
-    /*
+
     cleanFast(2, 2);
     cleanFast(3, 1);
     vscan_start();
-    einkOff();
+    if (!_leaveOn) einkOff();
+    
+    //After update, copy differences to screen buffer
     for (int i = 0; i < (E_INK_WIDTH * E_INK_HEIGHT / 8); i++)
     {
-        *(D_memory_new + i) &= *(_partial + i);
-        *(D_memory_new + i) |= (*(_partial + i));
+        *(imageBuffer + i) &= *(partialBuffer + i);
+        *(imageBuffer + i) |= (*(partialBuffer + i));
     }
-    */
 }
 
 void Inkplate::drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char* _p, int16_t _w, int16_t _h)
@@ -539,7 +505,7 @@ void Inkplate::vscan_end() {
     LE_CLEAR;
     //delayMicroseconds(1);
     int32_t start  = dwt_getCycles();
-    int32_t cycles = int32_t(0.4 * (SystemCoreClock / 1000000));
+    int32_t cycles = int32_t(0.7 * (SystemCoreClock / 1000000));
     while ((int32_t)dwt_getCycles() - start < cycles);
 }
 
@@ -566,15 +532,15 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
     }
   
     //uint32_t _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);;
-    for (int k = 0; k < rep; k++)
+    for (int k = 0; k < rep; ++k)
     {
         vscan_start();
-        for (int i = 0; i < E_INK_HEIGHT; i++)
+        for (int i = 0; i < E_INK_HEIGHT; ++i)
         {
             hscan_start(data);
             GPIOD -> BSRR  = (data) | CL;
             GPIOD -> BSRR  = CL << 16;
-            for (int j = 0; j < (E_INK_WIDTH / 8) - 1; j++)
+            for (int j = 0; j < (E_INK_WIDTH / 8) - 1; ++j)
             {
                 GPIOD -> BSRR = CL;
                 GPIOD -> BSRR = CL << 16; 
@@ -637,46 +603,41 @@ void Inkplate::pinsAsOutputs()
 // Display content from RAM to display (1 bit per pixel,. monochrome picture).
 void Inkplate::display1b()
 {
-    /*
+    //Full update? Copy everything in screen buffer before refresh!
     for(int i = 0; i<(E_INK_HEIGHT * E_INK_WIDTH) / 8; i++)
     {
-        *(D_memory_new + i) &= *(_partial + i);
-        *(D_memory_new + i) |= (*(_partial + i));
+        *(imageBuffer + i) &= *(partialBuffer + i);
+        *(imageBuffer + i) |= (*(partialBuffer + i));
     }
-    */
-    uint32_t _pos;
+    
+    uint8_t *_pos;
     uint8_t data;
-    uint8_t dram;
     einkOn();
-    cleanFast(0, 17);
-    cleanFast(1, 17);
-    cleanFast(0, 17);
-    cleanFast(1, 17);
-      for (int k = 0; k < 4; k++)
+    cleanFast(0, 20);
+    cleanFast(1, 20);
+    cleanFast(0, 20);
+    cleanFast(1, 20);
+      for (int k = 0; k < 16; ++k)
       {
-        _pos = (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
+        _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
         vscan_start();
-        for (int i = 0; i < E_INK_HEIGHT; i++)
+        for (int i = 0; i < E_INK_HEIGHT; ++i)
         {
-        //dram = ~(*(D_memory_new + _pos));
-        dram = ~(*(imageBuffer + _pos));
-        data = LUTW[(dram >> 4) & 0x0F];
+        data = LUTW[(~(*_pos) >> 4) & 0x0F];
         hscan_start(data);
-        data = LUTW[dram & 0x0F];
+        data = LUTW[~(*_pos) & 0x0F];
         GPIOD -> BSRR = data | CL;
         GPIOD -> BSRR = (DATA | CL) << 16;
-        _pos--;
-        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); j++)
+        --_pos;
+        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
-            //dram = ~(*(D_memory_new + _pos));
-            dram = ~(*(imageBuffer + _pos));
-            data = LUTW[(dram >> 4)&0x0F];
+            data = LUTW[(~(*_pos) >> 4)&0x0F];
             GPIOD -> BSRR = data | CL;
             GPIOD -> BSRR = (DATA | CL) << 16;
-            data = LUTW[dram & 0x0F];
+            data = LUTW[~(*_pos) & 0x0F];
             GPIOD -> BSRR = data | CL;
             GPIOD -> BSRR = (DATA | CL) << 16;
-            _pos--;
+            --_pos;
         }
         GPIOD -> BSRR = CL;
         GPIOD -> BSRR = (DATA | CL) << 16;
@@ -685,26 +646,22 @@ void Inkplate::display1b()
         delayMicroseconds(230);
     }
   
-	_pos = (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
+    _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8);
     vscan_start();
-    for (int i = 0; i < E_INK_HEIGHT; i++)
+    for (int i = 0; i < E_INK_HEIGHT; ++i)
     {
-	  //dram = *(D_memory_new + _pos);
-      dram = *(imageBuffer + _pos);
-      data = LUT2[(dram >> 4) & 0x0F];
+      data = LUT2[((*_pos) >> 4) & 0x0F];
 	  hscan_start(data);
-	  data = LUT2[dram & 0x0F];
+	  data = LUT2[(*_pos) & 0x0F];
 	  GPIOD -> BSRR = (data) | CL;
       GPIOD -> BSRR = (DATA | CL) << 16;
 	  _pos--;
-      for (int j = 0; j < ((E_INK_WIDTH / 8)-1); j++)
+      for (int j = 0; j < ((E_INK_WIDTH / 8)-1); ++j)
       {
-		//dram = *(D_memory_new + _pos);
-        dram = *(imageBuffer + _pos);
-        data = LUT2[(dram >> 4) & 0x0F];
+        data = LUT2[((*_pos) >> 4) & 0x0F];
 		GPIOD -> BSRR = (data) | CL;
         GPIOD -> BSRR = (DATA | CL) << 16;
-        data = LUT2[dram & 0x0F];
+        data = LUT2[(*_pos) & 0x0F];
 		GPIOD -> BSRR = (data) | CL;
         GPIOD -> BSRR = (DATA | CL) << 16;
 		_pos--;
@@ -730,7 +687,6 @@ void Inkplate::display3b()
     cleanFast(1, 20);
     cleanFast(0, 20);
     cleanFast(1, 20);
-  
     for (int k = 0; k < 16; k++)
     {
         //uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);

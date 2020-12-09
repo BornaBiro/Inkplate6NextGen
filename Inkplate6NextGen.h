@@ -136,7 +136,7 @@ class Inkplate : public Adafruit_GFX {
     void drawPixel(int16_t x0, int16_t y0, uint16_t color);
     void clearDisplay();
     void display();
-    void partialUpdate();
+    void partialUpdate(uint8_t leaveOn = 0);
 	void drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char* _p, int16_t _w, int16_t _h);
 	void setRotation(uint8_t);
     void einkOff(void);
