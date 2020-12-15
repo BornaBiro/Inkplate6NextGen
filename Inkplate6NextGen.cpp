@@ -27,9 +27,16 @@ Inkplate::Inkplate(uint8_t _mode) : Adafruit_GFX(E_INK_WIDTH, E_INK_HEIGHT)
 void Inkplate::begin(void)
 {
     if(_beginDone == 1) return;
+    // Init STM32 FMC (Flexible memory controller) for faster pushing data to panel using Hardware (similar to ESP32 I2S Parallel, but much faster and better)
+    stm32FmcInit();
+    
     Wire.setSDA(TPS_SDA);
     Wire.setSCL(TPS_SCL);
     Wire.begin();
+    
+    pinMode(PG9, OUTPUT);   //TPS65186_PWRUP
+    pinMode(PB4, OUTPUT);   //TPS65186_WAKEUP
+    pinMode(PB3, OUTPUT);   //TPS65186_VCOMCTRL
   
     WAKEUP_SET;
     delay(1);
@@ -42,29 +49,37 @@ void Inkplate::begin(void)
     Wire.endTransmission();
     delay(1);
     WAKEUP_CLEAR;
-    
-    pinMode(PE9, OUTPUT);
-    pinMode(PG12, OUTPUT);
-    pinMode(PF3, OUTPUT);
 
     // CONTROL PINS
-    pinMode(PD11, OUTPUT);
-    pinMode(PC9, OUTPUT);
-    pinMode(PC10, OUTPUT);
-    pinMode(PG3, OUTPUT);
-    pinMode(PC12, OUTPUT);
-    pinMode(PE2, OUTPUT);
-    pinMode(PE3, OUTPUT);
+    // PD11 -> Clock pin of EPD. Not used anymore, because of FMC
+    // pinMode(PD11, OUTPUT);
+    //PAXY Not Defined in Arduino IDE because of USB OTG and Ethernet on Nucleo Board! Switched to PB & PG port.
+    /*
+    pinMode(PA0, OUTPUT);   //EPD_CKV
+    pinMode(PA1, OUTPUT);   //EPD_SPV
+    pinMode(PA2, OUTPUT);   //EPD_SPH
+    pinMode(PA8, OUTPUT);   //EPD_OE
+    pinMode(PB6, OUTPUT);   //EPD_GMODE
+    pinMode(PB15, OUTPUT);  //EPD_LE
+    */
+    
+    pinMode(PD6, OUTPUT);   //EPD_CKV
+    pinMode(PD7, OUTPUT);   //EPD_SPV
+    pinMode(PG10, OUTPUT);  //EPD_SPH
+    pinMode(PB5, OUTPUT);   //EPD_OE
+    pinMode(PB6, OUTPUT);   //EPD_GMODE
+    pinMode(PB15, OUTPUT);  //EPD_LE
 
+    // Not used anymore because of FMC
     // DATA PINS
-    pinMode(PD0, OUTPUT); //D0
-    pinMode(PD1, OUTPUT);
-    pinMode(PD2, OUTPUT);
-    pinMode(PD3, OUTPUT);
-    pinMode(PD4, OUTPUT);
-    pinMode(PD5, OUTPUT);
-    pinMode(PD6, OUTPUT);
-    pinMode(PD7, OUTPUT); //D7
+    //pinMode(PD0, OUTPUT); //D0
+    //pinMode(PD1, OUTPUT);
+    //pinMode(PD2, OUTPUT);
+    //pinMode(PD3, OUTPUT);
+    //pinMode(PD4, OUTPUT);
+    //pinMode(PD5, OUTPUT);
+    //pinMode(PD6, OUTPUT);
+    //pinMode(PD7, OUTPUT); //D7
   
     //D_memory_new = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
     //_partial = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
@@ -165,6 +180,9 @@ void Inkplate::display()
 
 void Inkplate::partialUpdate(uint8_t _leaveOn)
 {
+    // Just for now, do not display anything. Just try to clear the screen using FMC!
+    return;
+    // ------------------------------------------------------------------------------
     if (_displayMode != 0) return;
     if (_blockPartial == 1)
     {
@@ -189,21 +207,24 @@ void Inkplate::partialUpdate(uint8_t _leaveOn)
             --_pos;                                                 //Move address pointers
             --_partialPos;
             hscan_start(LUTW[diffw >> 4] & (LUTB[diffb >> 4]));                     //Start sending first pixel byte to panel
-            GPIOD -> BSRR  = (LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F])) | CL;      //Followed by second one
-            GPIOD -> BSRR  = (CL | DATA) << 16;                                     //Clock it!
+            //FMC handles that
+            //GPIOD -> BSRR  = (LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F])) | CL;      //Followed by second one
+            //GPIOD -> BSRR  = (CL | DATA) << 16;                                     //Clock it!
             for (int j = 0; j < 99; ++j)                                            //Now do all that for whole row
             {
                 diffw = *(_pos) & ~*(_partialPos);
                 diffb = ~*(_pos) & *(_partialPos);
                 --_pos;
                 --_partialPos;
-                GPIOD -> BSRR = LUTW[diffw >> 4] & (LUTB[diffb >> 4]) | CL;          //First 4 pixels
-                GPIOD -> BSRR = (CL | DATA) << 16;
-                GPIOD -> BSRR = LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F]) | CL;      //Last for pixels
-                GPIOD -> BSRR = (CL | DATA) << 16;
+                //FMC handles that
+                //GPIOD -> BSRR = LUTW[diffw >> 4] & (LUTB[diffb >> 4]) | CL;          //First 4 pixels
+                //GPIOD -> BSRR = (CL | DATA) << 16;
+                //GPIOD -> BSRR = LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F]) | CL;      //Last for pixels
+                //GPIOD -> BSRR = (CL | DATA) << 16;
             }
-            GPIOD -> BSRR = CL;                                                 //Clock last bit of data
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //FMC handles that
+            //GPIOD -> BSRR = CL;                                                 //Clock last bit of data
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             vscan_end();                                                        //Vrite one row to panel
         }
         delayMicroseconds(230);                                                 //Wait 230uS before new frame
@@ -272,7 +293,7 @@ void Inkplate::einkOff()
     SPH_CLEAR;
     SPV_CLEAR;
     LE_CLEAR;
-    CL_CLEAR;
+    //CL_CLEAR;
 
     VCOM_CLEAR;
     delay(6);
@@ -311,7 +332,7 @@ void Inkplate::einkOn()
     pinsAsOutputs();
     LE_CLEAR;
     OE_CLEAR;
-    CL_CLEAR;
+    //CL_CLEAR;
     SPH_SET;
     GMOD_SET;
     SPV_SET;
@@ -497,8 +518,11 @@ void Inkplate::vscan_start()
 void Inkplate::hscan_start(uint8_t _d)
 {
     SPH_CLEAR;
-    GPIOD -> BSRR = (_d) | CL;
-    GPIOD -> BSRR = (DATA | CL) << 16;
+    //FMC handles that
+    //GPIOD -> BSRR = (_d) | CL;
+    //GPIOD -> BSRR = (DATA | CL) << 16;
+    //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &_d, 1);
+    *(__IO uint8_t*)(0xcc000000) = _d;
     SPH_SET;
     CKV_SET;
 }
@@ -534,7 +558,9 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
     {
         data = B11111111;	  //Skip
     }
-  
+    
+    memset(oneRow, data, 200);
+    
     //uint32_t _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);;
     for (int k = 0; k < rep; ++k)
     {
@@ -542,17 +568,28 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
         for (int i = 0; i < E_INK_HEIGHT; ++i)
         {
             hscan_start(data);
-            GPIOD -> BSRR  = (data) | CL;
-            GPIOD -> BSRR  = CL << 16;
+            //FMC handles that
+            //GPIOD -> BSRR  = (data) | CL;
+            //GPIOD -> BSRR  = CL << 16;
+            // For some reason, to fill whole screen we have to clock 9 dummy data.
+            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 9);
+            *(__IO uint8_t*)(0xcc000000) = data;
             for (int j = 0; j < (E_INK_WIDTH / 8) - 1; ++j)
             {
-                GPIOD -> BSRR = CL;
-                GPIOD -> BSRR = CL << 16; 
-                GPIOD -> BSRR = CL;
-                GPIOD -> BSRR = CL << 16;
+                //FMC handles that
+                //GPIOD -> BSRR = CL;
+                //GPIOD -> BSRR = CL << 16; 
+                //GPIOD -> BSRR = CL;
+                //GPIOD -> BSRR = CL << 16;
+                *(__IO uint8_t*)(0xcc000000) = data;
+                *(__IO uint8_t*)(0xcc000000) = data;
             }
-            GPIOD -> BSRR = (data) | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //FMC handles that
+            //GPIOD -> BSRR = (data) | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
+            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 200);
+            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &data, 1);
+            *(__IO uint8_t*)(0xcc000000) = data;
             vscan_end();
         }
         delayMicroseconds(230);
@@ -562,51 +599,73 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
 void Inkplate::pinsZstate()
 {
     // CONTROL PINS
-    pinMode(PD11, INPUT);
-    pinMode(PC9, INPUT);
-    pinMode(PC10, INPUT);
-    pinMode(PG3, INPUT);
-    pinMode(PC12, INPUT);
-    pinMode(PE4, INPUT);
-    pinMode(PE3, INPUT);
+    //pinMode(PD11, INPUT);
+    //PAXY Not Defined in Arduino IDE because of USB OTG and Ethernet on Nucleo Board! Switched to PB & PG port.
+    /*
+    pinMode(PA0, INPUT);   //EPD_CKV
+    pinMode(PA1, INPUT);   //EPD_SPV
+    pinMode(PA2, INPUT);   //EPD_SPH
+    pinMode(PA8, INPUT);   //EPD_OE
+    pinMode(PB6, INPUT);   //EPD_GMODE
+    pinMode(PB15, INPUT);  //EPD_LE
+    */
+    
+    pinMode(PD6, INPUT);   //EPD_CKV
+    pinMode(PD7, INPUT);   //EPD_SPV
+    pinMode(PG10, INPUT);  //EPD_SPH
+    pinMode(PB5, INPUT);   //EPD_OE
+    pinMode(PB6, INPUT);   //EPD_GMODE
+    pinMode(PB15, INPUT);  //EPD_LE
+
 
     // DATA PINS
-    pinMode(PD0, INPUT); //D0
-    pinMode(PD1, INPUT);
-    pinMode(PD2, INPUT);
-    pinMode(PD3, INPUT);
-    pinMode(PD4, INPUT);
-    pinMode(PD5, INPUT);
-    pinMode(PD6, INPUT);
-    pinMode(PD7, INPUT); //D7
+    //pinMode(PD0, INPUT); //D0
+    //pinMode(PD1, INPUT);
+    //pinMode(PD2, INPUT);
+    //pinMode(PD3, INPUT);
+    //pinMode(PD4, INPUT);
+    //pinMode(PD5, INPUT);
+    //pinMode(PD6, INPUT);
+    //pinMode(PD7, INPUT); //D7
 }
 
 void Inkplate::pinsAsOutputs()
 {
     // CONTROL PINS
-    pinMode(PD11, OUTPUT);
-    pinMode(PC9, OUTPUT);
-    pinMode(PC10, OUTPUT);
-    pinMode(PG3, OUTPUT);
-    pinMode(PC12, OUTPUT);
-    pinMode(PE4, OUTPUT);
-    pinMode(PE3, OUTPUT);
+    //pinMode(PD11, OUTPUT);
+    //PAXY Not Defined in Arduino IDE because of USB OTG and Ethernet on Nucleo Board! Switched to PB & PG port.
+    /*
+    pinMode(PA0, INPUT);   //EPD_CKV
+    pinMode(PA1, INPUT);   //EPD_SPV
+    pinMode(PA2, INPUT);   //EPD_SPH
+    pinMode(PA8, INPUT);   //EPD_OE
+    pinMode(PB6, INPUT);   //EPD_GMODE
+    pinMode(PB15, INPUT);  //EPD_LE
+    */
+    
+    pinMode(PD6, OUTPUT);   //EPD_CKV
+    pinMode(PD7, OUTPUT);   //EPD_SPV
+    pinMode(PG10, OUTPUT);  //EPD_SPH
+    pinMode(PB5, OUTPUT);   //EPD_OE
+    pinMode(PB6, OUTPUT);   //EPD_GMODE
+    pinMode(PB15, OUTPUT);  //EPD_LE
 
     // DATA PINS
-    pinMode(PD0, OUTPUT); //D0
-    pinMode(PD1, OUTPUT);
-    pinMode(PD2, OUTPUT);
-    pinMode(PD3, OUTPUT);
-    pinMode(PD4, OUTPUT);
-    pinMode(PD5, OUTPUT);
-    pinMode(PD6, OUTPUT);
-    pinMode(PD7, OUTPUT); //D7
+    //pinMode(PD0, OUTPUT); //D0
+    //pinMode(PD1, OUTPUT);
+    //pinMode(PD2, OUTPUT);
+    //pinMode(PD3, OUTPUT);
+    //pinMode(PD4, OUTPUT);
+    //pinMode(PD5, OUTPUT);
+    //pinMode(PD6, OUTPUT);
+    //pinMode(PD7, OUTPUT); //D7
 }
 
 //--------------------------PRIVATE FUNCTIONS--------------------------------------------
 // Display content from RAM to display (1 bit per pixel,. monochrome picture).
 void Inkplate::display1b()
 {
+    return;
     uint8_t *_pos;
     uint8_t data;
     einkOn();
@@ -621,21 +680,21 @@ void Inkplate::display1b()
         data = LUT2[(~(*_pos) >> 4) & 0x0F];
         hscan_start(data);
         data = LUT2[~(*_pos) & 0x0F];
-        GPIOD -> BSRR = data | CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
+        //GPIOD -> BSRR = data | CL;
+        //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
             data = LUT2[(~(*_pos) >> 4)&0x0F];
-            GPIOD -> BSRR = data | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //GPIOD -> BSRR = data | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             data = LUT2[~(*_pos) & 0x0F];
-            GPIOD -> BSRR = data | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //GPIOD -> BSRR = data | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             --_pos;
         }
-        GPIOD -> BSRR = CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
+        //GPIOD -> BSRR = CL;
+        //GPIOD -> BSRR = (DATA | CL) << 16;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -670,21 +729,21 @@ void Inkplate::display1b()
         data = LUT2[(~(*_pos) >> 4) & 0x0F];
         hscan_start(data);
         data = LUT2[~(*_pos) & 0x0F];
-        GPIOD -> BSRR = data | CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
+        //GPIOD -> BSRR = data | CL;
+        //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
             data = LUT2[(~(*_pos) >> 4)&0x0F];
-            GPIOD -> BSRR = data | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //GPIOD -> BSRR = data | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             data = LUT2[~(*_pos) & 0x0F];
-            GPIOD -> BSRR = data | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //GPIOD -> BSRR = data | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             --_pos;
         }
-        GPIOD -> BSRR = CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
+        //GPIOD -> BSRR = CL;
+        //GPIOD -> BSRR = (DATA | CL) << 16;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -701,21 +760,21 @@ void Inkplate::display1b()
         data = LUT2[((*_pos) >> 4) & 0x0F];
         hscan_start(data);
         data = LUT2[(*_pos) & 0x0F];
-        GPIOD -> BSRR = data | CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
+        //GPIOD -> BSRR = data | CL;
+        //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
             data = LUT2[((*_pos) >> 4)&0x0F];
-            GPIOD -> BSRR = data | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //GPIOD -> BSRR = data | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             data = LUT2[(*_pos) & 0x0F];
-            GPIOD -> BSRR = data | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //GPIOD -> BSRR = data | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             --_pos;
         }
-        GPIOD -> BSRR = CL;
-        GPIOD -> BSRR = (DATA | CL) << 16;
+        //GPIOD -> BSRR = CL;
+        //GPIOD -> BSRR = (DATA | CL) << 16;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -743,20 +802,26 @@ void Inkplate::display3b()
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; i++)
         {
-            hscan_start((GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]));
-            GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
-		
-            for (int j = 0; j < ((E_INK_WIDTH/8)-1); j++)
+            //hscan_start((GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]));
+            hscan_start(0);
+            //GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
+            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 9);
+            for (int j = 0; j < ((E_INK_WIDTH/4)); j+=2)
             {
-                GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
-                GPIOD -> BSRR = (DATA | CL) << 16;
-                GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
-                GPIOD -> BSRR = (DATA | CL) << 16;
+                //GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
+                //GPIOD -> BSRR = (DATA | CL) << 16;
+                //GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
+                //GPIOD -> BSRR = (DATA | CL) << 16;
+                //oneRow[j] = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+                //oneRow[j+1] = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+                *(__IO uint8_t*)(0xcc000000) = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+                *(__IO uint8_t*)(0xcc000000) = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
             }
-        
-            GPIOD -> BSRR = CL;
-            GPIOD -> BSRR = (DATA | CL) << 16;
+            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 200);
+            
+            //GPIOD -> BSRR = CL;
+            //GPIOD -> BSRR = (DATA | CL) << 16;
             vscan_end();
         }
         delayMicroseconds(230);
@@ -846,4 +911,236 @@ int Inkplate::drawGrayscaleBitmap24(SdFile *f, struct bitmapHeader bmpHeader, in
   }
   f->close();
   return 1;
+}
+
+// --------Really low level STM32 related stuff. Do not change anything unless you really know what you are doing!--------
+void Inkplate::stm32FmcInit()
+{
+    // If you do not have SystemInit(), code freezes in SystemClock_Config2
+    SystemInit();
+    // Push STM32 as high as possigle (480MHz Core clock, 480 MHz FMC)
+    SystemClock_Config2();
+    // Update new Clock configuration
+    SystemCoreClockUpdate();
+  
+    //  // If you using stock clck speeds you need to set clock used by FMC
+    //  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+    //  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
+    //  PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_D1HCLK;
+    //  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    //  {
+    //    Error_Handler();
+    //  }
+
+    // Enable clock to GPIOs
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOH_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOG_CLK_ENABLE();
+
+    // Enable clock to FMC
+    __HAL_RCC_FMC_CLK_ENABLE();
+
+    // Init FMC
+    MX_FMC_Init();
+
+    /* L1 cache issue. On Atollic, STM32 was sending extra bytes (8 instead 1), on Arduino FMC did not work at all!
+    * https://community.st.com/s/question/0D50X0000C9hD8D/stm32f746-fmc-configured-for-8bit-parallel-interface-extra-bytes-sent
+    * https://community.st.com/s/question/0D50X00009XkWQE/stm32h743ii-fmc-8080-lcd-spurious-writes
+    * https://stackoverflow.com/questions/59198934/l1-cache-behaviour-of-stm32h7
+    */
+    HAL_SetFMCMemorySwappingConfig(FMC_SWAPBMAP_SDRAM_SRAM);
+}
+
+/* FMC initialization function */
+static void MX_FMC_Init(void)
+{
+    FMC_NORSRAM_TimingTypeDef Timing = {0};
+
+    /** Perform the SRAM2 memory initialization sequence
+    */
+    hsram2.Instance = FMC_NORSRAM_DEVICE;
+    hsram2.Extended = FMC_NORSRAM_EXTENDED_DEVICE;
+    /* hsram2.Init */
+    hsram2.Init.NSBank = FMC_NORSRAM_BANK4;
+    hsram2.Init.DataAddressMux = FMC_DATA_ADDRESS_MUX_DISABLE;
+    hsram2.Init.MemoryType = FMC_MEMORY_TYPE_SRAM;
+    hsram2.Init.MemoryDataWidth = FMC_NORSRAM_MEM_BUS_WIDTH_8;
+    hsram2.Init.BurstAccessMode = FMC_BURST_ACCESS_MODE_DISABLE;
+    hsram2.Init.WaitSignalPolarity = FMC_WAIT_SIGNAL_POLARITY_LOW;
+    hsram2.Init.WaitSignalActive = FMC_WAIT_TIMING_BEFORE_WS;
+    hsram2.Init.WriteOperation = FMC_WRITE_OPERATION_ENABLE;
+    hsram2.Init.WaitSignal = FMC_WAIT_SIGNAL_DISABLE;
+    hsram2.Init.ExtendedMode = FMC_EXTENDED_MODE_DISABLE;
+    hsram2.Init.AsynchronousWait = FMC_ASYNCHRONOUS_WAIT_DISABLE;
+    hsram2.Init.WriteBurst = FMC_WRITE_BURST_DISABLE;
+    hsram2.Init.ContinuousClock = FMC_CONTINUOUS_CLOCK_SYNC_ONLY;
+    hsram2.Init.WriteFifo = FMC_WRITE_FIFO_ENABLE;
+    hsram2.Init.PageSize = FMC_PAGE_SIZE_NONE;
+    /* Timing */
+    Timing.AddressSetupTime = 15;
+    Timing.AddressHoldTime = 15;
+    Timing.DataSetupTime = 40;
+    Timing.BusTurnAroundDuration = 0;
+    Timing.CLKDivision = 16;
+    Timing.DataLatency = 17;
+    Timing.AccessMode = FMC_ACCESS_MODE_A;
+    /* ExtTiming */
+
+    if (HAL_SRAM_Init(&hsram2, &Timing, NULL) != HAL_OK)
+    {
+        Error_Handler( );
+    }
+}
+
+static void HAL_FMC_MspInit(void) 
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    if (FMC_Initialized) 
+    {
+        return;
+    }
+    FMC_Initialized = 1;
+
+    /* Peripheral clock enable */
+    __HAL_RCC_FMC_CLK_ENABLE();
+
+    /** FMC GPIO Configuration
+        PE7   ------> FMC_D4
+        PE8   ------> FMC_D5
+        PE9   ------> FMC_D6
+        PE10  ------> FMC_D7
+        PD13  ------> FMC_A18
+        PD14  ------> FMC_D0
+        PD15  ------> FMC_D1
+        PD0   ------> FMC_D2
+        PD1   ------> FMC_D3
+        PD4   ------> FMC_NOE
+        PD5   ------> FMC_NWE
+        PG12  ------> FMC_NE4
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15 | GPIO_PIN_0
+                        | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+    HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+}
+
+extern "C" void HAL_SRAM_MspInit(SRAM_HandleTypeDef* hsram) 
+{
+    HAL_FMC_MspInit();
+}
+
+static void HAL_FMC_MspDeInit(void) 
+{
+    if (FMC_DeInitialized)
+    {
+        return;
+    }
+    FMC_DeInitialized = 1;
+    /* Peripheral clock enable */
+    __HAL_RCC_FMC_CLK_DISABLE();
+
+    /** FMC GPIO Configuration
+        PE7   ------> FMC_D4
+        PE8   ------> FMC_D5
+        PE9   ------> FMC_D6
+        PE10  ------> FMC_D7
+        PD13  ------> FMC_A18
+        PD14  ------> FMC_D0
+        PD15  ------> FMC_D1
+        PD0   ------> FMC_D2
+        PD1   ------> FMC_D3
+        PD4   ------> FMC_NOE
+        PD5   ------> FMC_NWE
+        PG12  ------> FMC_NE4
+    */
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10);
+
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15 | GPIO_PIN_0
+                    | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5);
+
+    HAL_GPIO_DeInit(GPIOG, GPIO_PIN_12);
+}
+
+extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef* hsram)
+{
+    HAL_FMC_MspDeInit();
+}
+
+static void SystemClock_Config2(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Supply configuration update enable 
+  */
+  HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
+  /** Configure the main internal regulator output voltage 
+  */
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
+
+  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+  /** Initializes the CPU, AHB and APB busses clocks 
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 60;
+  RCC_OscInitStruct.PLL.PLLP = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLR = 2;
+  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
+  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
+  RCC_OscInitStruct.PLL.PLLFRACN = 0;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB busses clocks 
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
+                              |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
+  PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }

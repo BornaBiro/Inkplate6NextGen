@@ -22,6 +22,8 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #include "Wire.h"
 #include "SPI.h"
 #include "SdFat.h"
+#include "stm32h7xx_hal.h"
+#include "stm32h7xx_hal_sram.h"
 
 #define E_INK_WIDTH 		800
 #define E_INK_HEIGHT 		600
@@ -37,45 +39,47 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 // Fast direct port manipulation defines for epaper panel
 #define DATA    		0x000000FF   //PD0 - PD7
 
+/* Clock pin is not used, we do not bit-bang data anymore. Now we are using FMC
 #define CL        		GPIO_PIN_11
 #define CL_SET    		{GPIOD -> BSRR = CL;}
 #define CL_CLEAR  		{GPIOD -> BSRR = CL << 16;}
+*/
 
-#define LE        		GPIO_PIN_9
-#define LE_SET    		{GPIOC -> BSRR = LE;}
-#define LE_CLEAR  		{GPIOC -> BSRR = LE << 16;}
+#define LE        		GPIO_PIN_15
+#define LE_SET    		{GPIOB -> BSRR = LE;}
+#define LE_CLEAR  		{GPIOB -> BSRR = LE << 16;}
 
-#define CKV       		GPIO_PIN_3
-#define CKV_SET   		{GPIOE -> BSRR = CKV;}
-#define CKV_CLEAR 		{GPIOE -> BSRR = CKV << 16;}
+#define CKV       		GPIO_PIN_6
+#define CKV_SET   		{GPIOD -> BSRR = CKV;}
+#define CKV_CLEAR 		{GPIOD -> BSRR = CKV << 16;}
 
-#define SPH         	GPIO_PIN_4
-#define SPH_SET     	{GPIOE -> BSRR = SPH;}
-#define SPH_CLEAR   	{GPIOE -> BSRR = SPH << 16;}
+#define SPH         	GPIO_PIN_10
+#define SPH_SET     	{GPIOG -> BSRR = SPH;}
+#define SPH_CLEAR   	{GPIOG -> BSRR = SPH << 16;}
 
-#define GMOD            GPIO_PIN_3
-#define GMOD_SET    	{GPIOG -> BSRR = GMOD;}
-#define GMOD_CLEAR  	{GPIOG -> BSRR = GMOD << 16;}
+#define GMOD            GPIO_PIN_6
+#define GMOD_SET    	{GPIOB -> BSRR = GMOD;}
+#define GMOD_CLEAR  	{GPIOB -> BSRR = GMOD << 16;}
 
-#define OE          	GPIO_PIN_10
-#define OE_SET      	{GPIOC -> BSRR = OE;}
-#define OE_CLEAR    	{GPIOC -> BSRR = OE << 16;}
+#define OE          	GPIO_PIN_5
+#define OE_SET      	{GPIOB -> BSRR = OE;}
+#define OE_CLEAR    	{GPIOB -> BSRR = OE << 16;}
 
-#define SPV         	GPIO_PIN_12
-#define SPV_SET     	{GPIOC -> BSRR = SPV;}
-#define SPV_CLEAR   	{GPIOC -> BSRR = SPV << 16;}
+#define SPV         	GPIO_PIN_7
+#define SPV_SET     	{GPIOD -> BSRR = SPV;}
+#define SPV_CLEAR   	{GPIOD -> BSRR = SPV << 16;}
 
-#define WAKEUP         	GPIO_PIN_9
-#define WAKEUP_SET     	{GPIOE -> BSRR = WAKEUP;}
-#define WAKEUP_CLEAR   	{GPIOE -> BSRR = WAKEUP << 16;}
+#define WAKEUP         	GPIO_PIN_4
+#define WAKEUP_SET     	{GPIOB -> BSRR = WAKEUP;}
+#define WAKEUP_CLEAR   	{GPIOB -> BSRR = WAKEUP << 16;}
 
-#define PWRUP         	GPIO_PIN_12
+#define PWRUP         	GPIO_PIN_9
 #define PWRUP_SET     	{GPIOG -> BSRR = PWRUP;}
 #define PWRUP_CLEAR   	{GPIOG -> BSRR = PWRUP << 16;}
 
 #define VCOM         	GPIO_PIN_3
-#define VCOM_SET     	{GPIOF -> BSRR = VCOM;}
-#define VCOM_CLEAR   	{GPIOF -> BSRR = VCOM << 16;}
+#define VCOM_SET     	{GPIOB -> BSRR = VCOM;}
+#define VCOM_CLEAR   	{GPIOB -> BSRR = VCOM << 16;}
 
 #ifndef _swap_int16_t
 #define _swap_int16_t(a, b) { int16_t t = a; a = b; b = t; }
@@ -83,6 +87,16 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 
 extern SPIClass spi2;
 extern SdFat sd;
+static SRAM_HandleTypeDef hsram2;
+
+static void MX_FMC_Init(void);
+static uint32_t FMC_Initialized = 0;
+static void HAL_FMC_MspInit(void);
+extern "C" void HAL_SRAM_MspInit(SRAM_HandleTypeDef* hsram);
+static uint32_t FMC_DeInitialized = 0;
+static void HAL_FMC_MspDeInit(void);
+extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef* hsram);
+static void SystemClock_Config2(void);
 
 class Inkplate : public Adafruit_GFX {
   public:
@@ -92,6 +106,7 @@ class Inkplate : public Adafruit_GFX {
     //uint8_t * _pBuffer;
     uint8_t *imageBuffer;
     uint8_t *partialBuffer;
+    uint8_t oneRow[200];
     const uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101, B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
     const uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010, B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
     const uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101, B01111111, B01111101, B01110111, B01110101, B01011111, B01011101, B01010111, B01010101};
@@ -160,6 +175,7 @@ class Inkplate : public Adafruit_GFX {
     void cleanFast(uint8_t c, uint8_t rep);
     void pinsZstate();
     void pinsAsOutputs();
+    void stm32FmcInit();
 
   private:
     int8_t _temperature;
