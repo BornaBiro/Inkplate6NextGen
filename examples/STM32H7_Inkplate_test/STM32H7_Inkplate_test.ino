@@ -17,14 +17,15 @@ void setup()
   //display.setTextSize(4);
   //display.print("This is test");
   //grad();
-  //display.drawBitmap3Bit(0, 0, gray, gray_w, gray_h);
-  //display.display();
-  //delay(5000);
-  //display.clearDisplay();
+  display.drawBitmap3Bit(0, 0, gray, gray_w, gray_h);
+  display.display();
+  delay(5000);
+  display.clearDisplay();
   //grad();
   //screenCenter();
-  //display.drawBitmap3Bit(0, 0, pic2, 800, 592);
-  //display.display();
+  //screenCenterBW();
+  display.drawBitmap3Bit(0, 0, pic2, 800, 592);
+  display.display();
 }
 
 void loop() {
@@ -51,6 +52,15 @@ void screenCenter()
   display.drawRect(789, 589, 10, 10, 0);
 }
 
+void screenCenterBW()
+{
+  display.drawRect(0, 0, 800, 600, BLACK);
+  display.drawRect(0, 0, 10, 10, BLACK);
+  display.drawRect(0, 589, 10, 10, BLACK);
+  display.drawRect(789, 0, 10, 10, BLACK);
+  display.drawRect(789, 589, 10, 10, BLACK);
+}
+
 void clearIt()
 {
   display.cleanFast(1, 20);
@@ -61,6 +71,7 @@ void clearIt()
   display.cleanFast(2, 2);
   display.cleanFast(0, 20);
   display.cleanFast(2, 2);
+  display.einkOff();
 }
 
 void SystemClock_Config360(void)

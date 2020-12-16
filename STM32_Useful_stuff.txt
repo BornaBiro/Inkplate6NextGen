@@ -5,3 +5,7 @@ STM32 FSMC Useful Links:
  - https://www.programmersought.com/article/39904539968/
  - https://stackoverflow.com/questions/41796128/how-to-setup-fast-stm32-f4-fsmc-to-control-a-display-on-the-stm32f4discovery-boa
  - https://www.st.com/resource/en/application_note/dm00129600-using-the-highdensity-stm32f30xxde-fmc-peripheral-to-drive-external-memories-stmicroelectronics.pdf
+ - https://community.st.com/s/question/0D50X00009XkWQESA3/stm32h743ii-fmc-8080-lcd-spurious-writes
+ - https://developer.arm.com/documentation/dui0646/a/cortex-m7-peripherals/optional-memory-protection-unit
+ - https://community.st.com/s/question/0D50X00009XkftC/stm32-fmc-display
+ - https://community.st.com/s/question/0D50X0000BtaWB2/known-issues-with-dcache-and-fmc-on-stm32f7
