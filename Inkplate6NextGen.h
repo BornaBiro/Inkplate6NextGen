@@ -37,7 +37,7 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define PWR_GOOD_OK         0b11111010
 
 // Fast direct port manipulation defines for epaper panel
-#define DATA    		0x000000FF   //PD0 - PD7
+//#define DATA    		0x000000FF   //PD0 - PD7
 
 /* Clock pin is not used, we do not bit-bang data anymore. Now we are using FMC
 #define CL        		GPIO_PIN_11
@@ -73,9 +73,9 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define WAKEUP_SET     	{GPIOB -> BSRR = WAKEUP;}
 #define WAKEUP_CLEAR   	{GPIOB -> BSRR = WAKEUP << 16;}
 
-#define PWRUP         	GPIO_PIN_9
-#define PWRUP_SET     	{GPIOG -> BSRR = PWRUP;}
-#define PWRUP_CLEAR   	{GPIOG -> BSRR = PWRUP << 16;}
+#define PWRUP         	GPIO_PIN_7
+#define PWRUP_SET     	{GPIOD -> BSRR = PWRUP;}
+#define PWRUP_CLEAR   	{GPIOD -> BSRR = PWRUP << 16;}
 
 #define VCOM         	GPIO_PIN_3
 #define VCOM_SET     	{GPIOB -> BSRR = VCOM;}

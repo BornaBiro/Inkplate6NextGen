@@ -34,7 +34,7 @@ void Inkplate::begin(void)
     Wire.setSCL(TPS_SCL);
     Wire.begin();
     
-    pinMode(PG9, OUTPUT);   //TPS65186_PWRUP
+    pinMode(PD7, OUTPUT);   //TPS65186_PWRUP
     pinMode(PB4, OUTPUT);   //TPS65186_WAKEUP
     pinMode(PB3, OUTPUT);   //TPS65186_VCOMCTRL
   
@@ -288,7 +288,7 @@ void Inkplate::einkOff()
         return;
     OE_CLEAR;
     GMOD_CLEAR;
-    GPIOD -> BSRR = DATA << 16;
+    //GPIOD -> BSRR = DATA << 16;
     CKV_CLEAR;
     SPH_CLEAR;
     SPV_CLEAR;
@@ -517,13 +517,13 @@ void Inkplate::vscan_start()
 
 void Inkplate::hscan_start(uint8_t _d)
 {
-    SPH_CLEAR;
+    SPH_SET;
     //FMC handles that
     //GPIOD -> BSRR = (_d) | CL;
     //GPIOD -> BSRR = (DATA | CL) << 16;
-    //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &_d, 1);
-    *(__IO uint8_t*)(0xcc000000) = _d;
-    SPH_SET;
+    HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &_d, 1);
+    //*(__IO uint8_t*)(0xcc000000) = _d;
+    SPH_CLEAR;
     CKV_SET;
 }
 
@@ -533,7 +533,7 @@ void Inkplate::vscan_end() {
     LE_CLEAR;
     //delayMicroseconds(1);
     int32_t start  = dwt_getCycles();
-    int32_t cycles = int32_t(0.7 * (SystemCoreClock / 1000000));
+    int32_t cycles = int32_t(1 * (SystemCoreClock / 1000000));
     while ((int32_t)dwt_getCycles() - start < cycles);
 }
 
@@ -572,24 +572,25 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
             //GPIOD -> BSRR  = (data) | CL;
             //GPIOD -> BSRR  = CL << 16;
             // For some reason, to fill whole screen we have to clock 9 dummy data.
-            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 9);
-            *(__IO uint8_t*)(0xcc000000) = data;
-            for (int j = 0; j < (E_INK_WIDTH / 8) - 1; ++j)
-            {
+            HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &data, 1);
+            //*(__IO uint8_t*)(0xcc000000) = data;
+            //for (int j = 0; j < (E_INK_WIDTH / 8) - 1; ++j)
+            //{
                 //FMC handles that
                 //GPIOD -> BSRR = CL;
                 //GPIOD -> BSRR = CL << 16; 
                 //GPIOD -> BSRR = CL;
                 //GPIOD -> BSRR = CL << 16;
-                *(__IO uint8_t*)(0xcc000000) = data;
-                *(__IO uint8_t*)(0xcc000000) = data;
-            }
+                //*(__IO uint8_t*)(0xcc000000) = data;
+                //*(__IO uint8_t*)(0xcc000000) = data;
+            //}
             //FMC handles that
             //GPIOD -> BSRR = (data) | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
-            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 200);
-            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &data, 1);
-            *(__IO uint8_t*)(0xcc000000) = data;
+            HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 200);
+            HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &data, 1);
+            delayMicroseconds(3);
+            //*(__IO uint8_t*)(0xcc000000) = data;
             vscan_end();
         }
         delayMicroseconds(230);
@@ -665,7 +666,6 @@ void Inkplate::pinsAsOutputs()
 // Display content from RAM to display (1 bit per pixel,. monochrome picture).
 void Inkplate::display1b()
 {
-    return;
     uint8_t *_pos;
     uint8_t data;
     einkOn();
@@ -680,21 +680,25 @@ void Inkplate::display1b()
         data = LUT2[(~(*_pos) >> 4) & 0x0F];
         hscan_start(data);
         data = LUT2[~(*_pos) & 0x0F];
+        *(__IO uint8_t*)(0xcc000000) = data;
         //GPIOD -> BSRR = data | CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
             data = LUT2[(~(*_pos) >> 4)&0x0F];
+            *(__IO uint8_t*)(0xcc000000) = data;
             //GPIOD -> BSRR = data | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
             data = LUT2[~(*_pos) & 0x0F];
+            *(__IO uint8_t*)(0xcc000000) = data;
             //GPIOD -> BSRR = data | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
             --_pos;
         }
         //GPIOD -> BSRR = CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
+        *(__IO uint8_t*)(0xcc000000) = data;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -729,21 +733,25 @@ void Inkplate::display1b()
         data = LUT2[(~(*_pos) >> 4) & 0x0F];
         hscan_start(data);
         data = LUT2[~(*_pos) & 0x0F];
+        *(__IO uint8_t*)(0xcc000000) = data;
         //GPIOD -> BSRR = data | CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
             data = LUT2[(~(*_pos) >> 4)&0x0F];
+            *(__IO uint8_t*)(0xcc000000) = data;
             //GPIOD -> BSRR = data | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
             data = LUT2[~(*_pos) & 0x0F];
+            *(__IO uint8_t*)(0xcc000000) = data;
             //GPIOD -> BSRR = data | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
             --_pos;
         }
         //GPIOD -> BSRR = CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
+        *(__IO uint8_t*)(0xcc000000) = data;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -760,21 +768,25 @@ void Inkplate::display1b()
         data = LUT2[((*_pos) >> 4) & 0x0F];
         hscan_start(data);
         data = LUT2[(*_pos) & 0x0F];
+        *(__IO uint8_t*)(0xcc000000) = data;
         //GPIOD -> BSRR = data | CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
         for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
         {
             data = LUT2[((*_pos) >> 4)&0x0F];
+            *(__IO uint8_t*)(0xcc000000) = data;
             //GPIOD -> BSRR = data | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
             data = LUT2[(*_pos) & 0x0F];
+            *(__IO uint8_t*)(0xcc000000) = data;
             //GPIOD -> BSRR = data | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
             --_pos;
         }
         //GPIOD -> BSRR = CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
+        *(__IO uint8_t*)(0xcc000000) = data;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -795,6 +807,8 @@ void Inkplate::display3b()
     cleanFast(1, 20);
     cleanFast(0, 20);
     cleanFast(1, 20);
+    uint8_t data;
+    uint32_t z = 0;
     for (int k = 0; k < 16; k++)
     {
         //uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);
@@ -803,25 +817,32 @@ void Inkplate::display3b()
         for (int i = 0; i < E_INK_HEIGHT; i++)
         {
             //hscan_start((GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]));
-            hscan_start(0);
+            hscan_start(GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]);
             //GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
-            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 9);
-            for (int j = 0; j < ((E_INK_WIDTH/4)); j+=2)
+            //*(__IO uint8_t*)(0xcc000000) = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+            data = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+            HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, &data, 1);
+            z = 0;
+            for (int j = 0; j < ((E_INK_WIDTH/8))-1; j++)
             {
                 //GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
                 //GPIOD -> BSRR = (DATA | CL) << 16;
                 //GPIOD -> BSRR = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
                 //GPIOD -> BSRR = (DATA | CL) << 16;
-                //oneRow[j] = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
-                //oneRow[j+1] = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
-                *(__IO uint8_t*)(0xcc000000) = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
-                *(__IO uint8_t*)(0xcc000000) = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+                oneRow[z] = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+                z++;
+                oneRow[z] = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+                z++;
+                //*(__IO uint8_t*)(0xcc000000) = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
+                //*(__IO uint8_t*)(0xcc000000) = GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))];
             }
-            //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 200);
+            //*(__IO uint8_t*)(0xcc000000) = 0;
+            HAL_SRAM_Write_8b(&hsram2, (uint32_t*)0xcc000000, oneRow, 200);
             
             //GPIOD -> BSRR = CL;
             //GPIOD -> BSRR = (DATA | CL) << 16;
+            delayMicroseconds(3);
             vscan_end();
         }
         delayMicroseconds(230);
@@ -981,9 +1002,9 @@ static void MX_FMC_Init(void)
     hsram2.Init.WriteFifo = FMC_WRITE_FIFO_ENABLE;
     hsram2.Init.PageSize = FMC_PAGE_SIZE_NONE;
     /* Timing */
-    Timing.AddressSetupTime = 15;
+    Timing.AddressSetupTime = 10;
     Timing.AddressHoldTime = 15;
-    Timing.DataSetupTime = 40;
+    Timing.DataSetupTime = 10;
     Timing.BusTurnAroundDuration = 0;
     Timing.CLKDivision = 16;
     Timing.DataLatency = 17;
