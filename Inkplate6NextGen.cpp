@@ -87,8 +87,8 @@ void Inkplate::begin(void)
     //D_memory4Bit = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
     imageBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
     partialBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
-    GLUT = (uint8_t*)malloc(256 * 16 * sizeof(uint8_t));
-    GLUT2 = (uint8_t*)malloc(256 * 16 * sizeof(uint8_t));
+    GLUT = (uint8_t*)malloc(256 * 25 * sizeof(uint8_t));
+    GLUT2 = (uint8_t*)malloc(256 * 25 * sizeof(uint8_t));
     if (imageBuffer == NULL || partialBuffer == NULL || GLUT == NULL || GLUT2 == NULL)
     {
         Serial.print("Memory alloc. fail");
@@ -105,7 +105,7 @@ void Inkplate::begin(void)
     memset(imageBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
     memset(partialBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
   
-    for (int j = 0; j < 16; ++j) {
+    for (int j = 0; j < 25; ++j) {
         for (uint32_t i = 0; i < 256; ++i) {
         GLUT[j*256+i] = (waveform3Bit[i & 0x0f][j] << 2) | (waveform3Bit[(i >> 4) & 0x0f][j]);
         GLUT2[j*256+i] = ((waveform3Bit[i & 0x0f][j] << 2) | (waveform3Bit[(i >> 4) & 0x0f][j])) << 4;
@@ -794,8 +794,8 @@ void Inkplate::display1b()
         delayMicroseconds(230);
     }
     
-    cleanFast(2, 2);
-    cleanFast(3, 1);
+    cleanFast(2, 3);
+    cleanFast(3, 2);
     vscan_start();
     einkOff();
     _blockPartial = 0;
@@ -805,13 +805,16 @@ void Inkplate::display1b()
 void Inkplate::display3b()
 {
     einkOn();
-    cleanFast(0, 20);
-    cleanFast(1, 20);
-    cleanFast(0, 20);
-    cleanFast(1, 20);
+    cleanFast(1, 28);
+    cleanFast(2, 7);
+    cleanFast(0, 28);
+    cleanFast(2, 7);
+    cleanFast(1, 28);
+    cleanFast(2, 7);
+    cleanFast(0, 28);
     uint8_t data;
     uint32_t z = 0;
-    for (int k = 0; k < 16; k++)
+    for (int k = 0; k < 25; k++)
     {
         //uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);
         uint8_t *dp = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH/2);
@@ -848,8 +851,8 @@ void Inkplate::display3b()
         }
         delayMicroseconds(230);
     }
-    cleanFast(2, 1);
-    cleanFast(3, 1);
+    cleanFast(2, 3);
+    cleanFast(3, 2);
     vscan_start();
     einkOff();
 }
