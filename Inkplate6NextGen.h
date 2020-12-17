@@ -33,6 +33,7 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define INKPLATE_3BIT 		1
 #define TPS_SDA             14
 #define TPS_SCL             15
+#define FMC_ADDRESS         0xcc000000
 
 #define PWR_GOOD_OK         0b11111010
 
@@ -97,6 +98,7 @@ static uint32_t FMC_DeInitialized = 0;
 static void HAL_FMC_MspDeInit(void);
 extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef* hsram);
 static void SystemClock_Config2(void);
+static void delayUS(float _t);
 
 class Inkplate : public Adafruit_GFX {
   public:
@@ -170,7 +172,7 @@ class Inkplate : public Adafruit_GFX {
     int8_t readTemperature();
     double readBattery();
 	void vscan_start();
-	void hscan_start(uint8_t _d = 0);
+	void hscan_start(uint8_t _d1 = 0, uint8_t _d2 = 0);
 	void vscan_end();
     void cleanFast(uint8_t c, uint8_t rep);
     void pinsZstate();
