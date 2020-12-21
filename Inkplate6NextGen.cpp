@@ -527,14 +527,18 @@ void Inkplate::hscan_start(uint8_t _d1, uint8_t _d2)
     *(__IO uint8_t*)(FMC_ADDRESS) = _d2;
     delayUS(0.2);
     CKV_SET;
+    delayUS(0.2);
 }
 
 void Inkplate::vscan_end() {
     CKV_CLEAR;
+    *(__IO uint8_t*)(FMC_ADDRESS) = 0;
     delayUS(0.2);
     LE_SET;
+    *(__IO uint8_t*)(FMC_ADDRESS) = 0;
     delayUS(0.2);
     LE_CLEAR;
+    *(__IO uint8_t*)(FMC_ADDRESS) = 0;
     //delayMicroseconds(1);
     delayUS(0.2);
 }
