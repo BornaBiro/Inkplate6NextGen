@@ -64,9 +64,9 @@ void Inkplate::begin(void)
     */
     
     pinMode(PD6, OUTPUT);   //EPD_CKV
-    pinMode(PD7, OUTPUT);   //EPD_SPV
+    pinMode(PD3, OUTPUT);   //EPD_SPV
     pinMode(PG10, OUTPUT);  //EPD_SPH
-    pinMode(PB5, OUTPUT);   //EPD_OE
+    pinMode(PB4, OUTPUT);   //EPD_OE
     pinMode(PB6, OUTPUT);   //EPD_GMODE
     pinMode(PB15, OUTPUT);  //EPD_LE
 
@@ -516,31 +516,38 @@ void Inkplate::vscan_start()
 
 void Inkplate::hscan_start(uint8_t _d1, uint8_t _d2)
 {
+    //delayUS(2);
+    //*(__IO uint8_t*)(FMC_ADDRESS) = _d1;
+    delayUS(0.2);  //Remove it
     SPH_CLEAR;
+    delayUS(0.2);   //Remove it
+    *(__IO uint8_t*)(FMC_ADDRESS) = _d1;
+    delayUS(0.2);   //Remove it
     //FMC handles that
     //GPIOD -> BSRR = (_d) | CL;
     //GPIOD -> BSRR = (DATA | CL) << 16;
     //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)FMC_ADDRESS, &_d, 1);
-    *(__IO uint8_t*)(FMC_ADDRESS) = _d1;
-    delayUS(0.2);
     SPH_SET;
-    *(__IO uint8_t*)(FMC_ADDRESS) = _d2;
-    delayUS(0.2);
+    //delayUS(2);   //Remove it
     CKV_SET;
-    delayUS(0.2);
+    //delayUS(2);  //Remove it
+    *(__IO uint8_t*)(FMC_ADDRESS) = _d2;
+    //delayUS(2);   //Remove it
 }
 
 void Inkplate::vscan_end() {
     CKV_CLEAR;
-    *(__IO uint8_t*)(FMC_ADDRESS) = 0;
-    delayUS(0.2);
+    //delayUS(2);
+    //*(__IO uint8_t*)(FMC_ADDRESS) = 0;
+    //delayUS(1);
     LE_SET;
-    *(__IO uint8_t*)(FMC_ADDRESS) = 0;
-    delayUS(0.2);
+    //*(__IO uint8_t*)(FMC_ADDRESS) = 0;
+    delayUS(0.2);       //Remove it
     LE_CLEAR;
-    *(__IO uint8_t*)(FMC_ADDRESS) = 0;
+    //delayUS(2);
+    //*(__IO uint8_t*)(FMC_ADDRESS) = 0;
     //delayMicroseconds(1);
-    delayUS(0.2);
+    //delayUS(1);
 }
 
 // Clears content from epaper diplay as fast as ESP32 can.
@@ -579,7 +586,7 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
             //GPIOD -> BSRR  = CL << 16;
             //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)FMC_ADDRESS, &data, 1);
             //*(__IO uint8_t*)(FMC_ADDRESS) = data;
-            for (int j = 0; j < (E_INK_WIDTH / 8) - 1; ++j)
+            for (int j = 0; j < (E_INK_WIDTH / 8) - 1; j++)
             {
                 //FMC handles that
                 //GPIOD -> BSRR = CL;
@@ -596,7 +603,7 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep)
             //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)FMC_ADDRESS, oneRow, 200);
             //HAL_SRAM_Write_8b(&hsram2, (uint32_t*)FMC_ADDRESS, &data, 1);
             //delayMicroseconds(10);
-            //*(__IO uint8_t*)(FMC_ADDRESS) = data;
+            *(__IO uint8_t*)(FMC_ADDRESS) = data;
             vscan_end();
         }
         delayMicroseconds(230);
@@ -618,9 +625,9 @@ void Inkplate::pinsZstate()
     */
     
     pinMode(PD6, INPUT);   //EPD_CKV
-    pinMode(PD7, INPUT);   //EPD_SPV
+    pinMode(PD3, INPUT);   //EPD_SPV
     pinMode(PG10, INPUT);  //EPD_SPH
-    pinMode(PB5, INPUT);   //EPD_OE
+    pinMode(PB4, INPUT);   //EPD_OE
     pinMode(PB6, INPUT);   //EPD_GMODE
     pinMode(PB15, INPUT);  //EPD_LE
 
@@ -651,9 +658,9 @@ void Inkplate::pinsAsOutputs()
     */
     
     pinMode(PD6, OUTPUT);   //EPD_CKV
-    pinMode(PD7, OUTPUT);   //EPD_SPV
+    pinMode(PD3, OUTPUT);   //EPD_SPV
     pinMode(PG10, OUTPUT);  //EPD_SPH
-    pinMode(PB5, OUTPUT);   //EPD_OE
+    pinMode(PB4, OUTPUT);   //EPD_OE
     pinMode(PB6, OUTPUT);   //EPD_GMODE
     pinMode(PB15, OUTPUT);  //EPD_LE
 
@@ -690,7 +697,7 @@ void Inkplate::display1b()
         //GPIOD -> BSRR = data | CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
-        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
+        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); j++)
         {
             data = LUT2[(~(*_pos) >> 4)&0x0F];
             *(__IO uint8_t*)(FMC_ADDRESS) = data;
@@ -704,7 +711,7 @@ void Inkplate::display1b()
         }
         //GPIOD -> BSRR = CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
-        //*(__IO uint8_t*)(FMC_ADDRESS) = data;
+        *(__IO uint8_t*)(FMC_ADDRESS) = data;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -743,7 +750,7 @@ void Inkplate::display1b()
         //GPIOD -> BSRR = data | CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
-        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
+        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); j++)
         {
             data = LUT2[(~(*_pos) >> 4)&0x0F];
             *(__IO uint8_t*)(FMC_ADDRESS) = data;
@@ -757,7 +764,7 @@ void Inkplate::display1b()
         }
         //GPIOD -> BSRR = CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
-        //*(__IO uint8_t*)(FMC_ADDRESS) = data;
+        *(__IO uint8_t*)(FMC_ADDRESS) = data;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -778,7 +785,7 @@ void Inkplate::display1b()
         //GPIOD -> BSRR = data | CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
         --_pos;
-        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); ++j)
+        for (int j = 0; j < ((E_INK_WIDTH / 8) - 1); j++)
         {
             data = LUT2[((*_pos) >> 4)&0x0F];
             *(__IO uint8_t*)(FMC_ADDRESS) = data;
@@ -792,7 +799,7 @@ void Inkplate::display1b()
         }
         //GPIOD -> BSRR = CL;
         //GPIOD -> BSRR = (DATA | CL) << 16;
-        //*(__IO uint8_t*)(FMC_ADDRESS) = data;
+        *(__IO uint8_t*)(FMC_ADDRESS) = data;
         vscan_end();
         }
         delayMicroseconds(230);
@@ -809,13 +816,13 @@ void Inkplate::display1b()
 void Inkplate::display3b()
 {
     einkOn();
-    cleanFast(1, 28);
-    cleanFast(2, 7);
     cleanFast(0, 28);
     cleanFast(2, 7);
     cleanFast(1, 28);
     cleanFast(2, 7);
     cleanFast(0, 28);
+    cleanFast(2, 7);
+    cleanFast(1, 28);
     uint8_t data;
     uint32_t z = 0;
     for (int k = 0; k < 25; k++)
@@ -1010,9 +1017,9 @@ static void MX_FMC_Init(void)
     hsram2.Init.WriteFifo = FMC_WRITE_FIFO_DISABLE;                 // MUST BE DISABLED, OTHERWISE MESSES UP IMAGE ON EPD!
     hsram2.Init.PageSize = FMC_PAGE_SIZE_NONE;
     /* Timing */
-    Timing.AddressSetupTime = 10;
+    Timing.AddressSetupTime = 15;
     Timing.AddressHoldTime = 15;
-    Timing.DataSetupTime = 10;
+    Timing.DataSetupTime = 20;
     Timing.BusTurnAroundDuration = 0;
     Timing.CLKDivision = 16;
     Timing.DataLatency = 17;
