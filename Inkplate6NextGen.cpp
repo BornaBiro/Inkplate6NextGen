@@ -178,7 +178,7 @@ void Inkplate::display()
     if (_displayMode == 1) display3b();
 }
 
-void Inkplate::partialUpdate(uint8_t _leaveOn)
+void Inkplate::partialUpdate(uint8_t _leaveOn, uint16_t startRowPos, uint16_t endRowPos)
 {
     if (_displayMode != 0) return;
     if (_blockPartial == 1)
@@ -194,10 +194,12 @@ void Inkplate::partialUpdate(uint8_t _leaveOn)
     uint8_t diffb;
     for (int k = 0; k < 10; ++k)
     {
-        uint8_t *_pos = imageBuffer + (E_INK_WIDTH * E_INK_HEIGHT / 8) - 1;
-        uint8_t *_partialPos = partialBuffer  + (E_INK_WIDTH * E_INK_HEIGHT / 8) - 1;
         vscan_start();
-        for (int i = 0; i < 600; ++i)
+        rowSkip(E_INK_HEIGHT - endRowPos);
+        uint8_t *_pos = imageBuffer + (E_INK_WIDTH * endRowPos / 8) - 1;
+        uint8_t *_partialPos = partialBuffer  + (E_INK_WIDTH * endRowPos / 8) - 1;
+        
+        for (int i = startRowPos; i < endRowPos; ++i)
         {
             diffw = *(_pos) & ~*(_partialPos);                      //Calculate differences in white pixels
             diffb = ~*(_pos) & *(_partialPos);                      //Calculate differences in black pixels    
@@ -226,6 +228,12 @@ void Inkplate::partialUpdate(uint8_t _leaveOn)
             //GPIOD -> BSRR = (DATA | CL) << 16;
             vscan_end();                                                        //Vrite one row to panel
         }
+        for (int j = 0; j < 100; ++j)                                            //Now do all that for whole row
+            {
+                *(__IO uint8_t*)(FMC_ADDRESS) = 0;
+                *(__IO uint8_t*)(FMC_ADDRESS) = 0;
+            }
+        rowSkip(startRowPos);
         delayMicroseconds(230);                                                 //Wait 230uS before new frame
     }
 
@@ -235,7 +243,7 @@ void Inkplate::partialUpdate(uint8_t _leaveOn)
     if (!_leaveOn) einkOff();
     
     //After update, copy differences to screen buffer
-    for (int i = 0; i < (E_INK_WIDTH * E_INK_HEIGHT / 8); i++)
+    for (int i = (E_INK_WIDTH * startRowPos / 8); i < (E_INK_WIDTH * endRowPos / 8); i++)
     {
         *(imageBuffer + i) &= *(partialBuffer + i);
         *(imageBuffer + i) |= (*(partialBuffer + i));
@@ -548,6 +556,17 @@ void Inkplate::vscan_end() {
     //*(__IO uint8_t*)(FMC_ADDRESS) = 0;
     //delayMicroseconds(1);
     //delayUS(1);
+}
+
+void Inkplate::rowSkip(uint16_t _n)
+{
+    for (int i = 0; i < _n; i++)
+    {
+        CKV_CLEAR;
+        delayUS(1);
+        CKV_SET;
+        delayUS(1);
+    }
 }
 
 // Clears content from epaper diplay as fast as ESP32 can.
