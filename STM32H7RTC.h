@@ -33,7 +33,7 @@ class STM32RTC
     void disableAlarm(uint32_t _alarm);
     void disableAlarmInterrupt();
     void enableSimpleAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _alarm, uint32_t _alarmMask, uint8_t _pmAm = RTC_HOURFORMAT12_AM, uint32_t _dayLightSaving = RTC_DAYLIGHTSAVING_NONE);
-    bool checkForAlarm();
+    bool checkForAlarm(bool _clearFlag = true);
     RTC_AlarmTypeDef getAlarm(uint8_t *_d, uint8_t *_h, uint8_t *_m, uint8_t *_s, uint32_t _alarm, uint32_t *_alarmMask, uint8_t *_pmAm, uint32_t *_dayLightSaving);
     RTC_AlarmTypeDef getAlarm();
     void setAlarmOutput(bool _outEn, uint32_t _alarm);

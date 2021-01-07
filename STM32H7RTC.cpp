@@ -174,10 +174,10 @@ void STM32RTC::enableSimpleAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s,
     HAL_RTC_SetAlarm(&hrtc, &myAlarm, RTC_FORMAT);
 }
 
-bool STM32RTC::checkForAlarm()
+bool STM32RTC::checkForAlarm(bool _clearFlag)
 {
     bool _r = (__HAL_RTC_ALARM_GET_FLAG(&hrtc, RTC_FLAG_ALRAF)) == 0 ? false : true;
-    if (_r) __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
+    if (_r && _clearFlag) __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
     return _r;
 }
 
