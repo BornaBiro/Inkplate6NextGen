@@ -31,8 +31,8 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define WHITE 				0
 #define INKPLATE_1BIT 		0
 #define INKPLATE_3BIT 		1
-#define TPS_SDA             14
-#define TPS_SCL             15
+#define TPS_SDA             PB9
+#define TPS_SCL             PB8
 #define FMC_ADDRESS         0xcc000000
 
 #define PWR_GOOD_OK         0b11111010
@@ -50,33 +50,33 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define LE_SET    		{GPIOB -> BSRR = LE;}
 #define LE_CLEAR  		{GPIOB -> BSRR = LE << 16;}
 
-#define CKV       		GPIO_PIN_6
-#define CKV_SET   		{GPIOD -> BSRR = CKV;}
-#define CKV_CLEAR 		{GPIOD -> BSRR = CKV << 16;}
+#define CKV       		GPIO_PIN_0
+#define CKV_SET   		{GPIOA -> BSRR = CKV;}
+#define CKV_CLEAR 		{GPIOA -> BSRR = CKV << 16;}
 
-#define SPH         	GPIO_PIN_10
-#define SPH_SET     	{GPIOG -> BSRR = SPH;}
-#define SPH_CLEAR   	{GPIOG -> BSRR = SPH << 16;}
+#define SPH         	GPIO_PIN_2
+#define SPH_SET     	{GPIOA -> BSRR = SPH;}
+#define SPH_CLEAR   	{GPIOA -> BSRR = SPH << 16;}
 
 #define GMOD            GPIO_PIN_6
 #define GMOD_SET    	{GPIOB -> BSRR = GMOD;}
 #define GMOD_CLEAR  	{GPIOB -> BSRR = GMOD << 16;}
 
-#define OE          	GPIO_PIN_5
-#define OE_SET      	{GPIOB -> BSRR = OE;}
-#define OE_CLEAR    	{GPIOB -> BSRR = OE << 16;}
+#define OE          	GPIO_PIN_8
+#define OE_SET      	{GPIOA -> BSRR = OE;}
+#define OE_CLEAR    	{GPIOA -> BSRR = OE << 16;}
 
-#define SPV         	GPIO_PIN_3
-#define SPV_SET     	{GPIOD -> BSRR = SPV;}
-#define SPV_CLEAR   	{GPIOD -> BSRR = SPV << 16;}
+#define SPV         	GPIO_PIN_1
+#define SPV_SET     	{GPIOA -> BSRR = SPV;}
+#define SPV_CLEAR   	{GPIOA -> BSRR = SPV << 16;}
 
-#define WAKEUP         	GPIO_PIN_4
-#define WAKEUP_SET     	{GPIOB -> BSRR = WAKEUP;}
-#define WAKEUP_CLEAR   	{GPIOB -> BSRR = WAKEUP << 16;}
+#define WAKEUP         	GPIO_PIN_12
+#define WAKEUP_SET     	{GPIOA -> BSRR = WAKEUP;}
+#define WAKEUP_CLEAR   	{GPIOA -> BSRR = WAKEUP << 16;}
 
-#define PWRUP         	GPIO_PIN_7
-#define PWRUP_SET     	{GPIOD -> BSRR = PWRUP;}
-#define PWRUP_CLEAR   	{GPIOD -> BSRR = PWRUP << 16;}
+#define PWRUP         	GPIO_PIN_11
+#define PWRUP_SET     	{GPIOA -> BSRR = PWRUP;}
+#define PWRUP_CLEAR   	{GPIOA -> BSRR = PWRUP << 16;}
 
 #define VCOM         	GPIO_PIN_3
 #define VCOM_SET     	{GPIOB -> BSRR = VCOM;}

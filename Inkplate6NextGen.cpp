@@ -34,8 +34,8 @@ void Inkplate::begin(void)
     Wire.setSCL(TPS_SCL);
     Wire.begin();
     
-    pinMode(PD7, OUTPUT);   //TPS65186_PWRUP
-    pinMode(PB4, OUTPUT);   //TPS65186_WAKEUP
+    pinMode(PA11, OUTPUT);   //TPS65186_PWRUP
+    pinMode(PA12, OUTPUT);   //TPS65186_WAKEUP
     pinMode(PB3, OUTPUT);   //TPS65186_VCOMCTRL
   
     WAKEUP_SET;
@@ -54,21 +54,21 @@ void Inkplate::begin(void)
     // PD11 -> Clock pin of EPD. Not used anymore, because of FMC
     // pinMode(PD11, OUTPUT);
     //PAXY Not Defined in Arduino IDE because of USB OTG and Ethernet on Nucleo Board! Switched to PB & PG port.
-    /*
+	
     pinMode(PA0, OUTPUT);   //EPD_CKV
     pinMode(PA1, OUTPUT);   //EPD_SPV
     pinMode(PA2, OUTPUT);   //EPD_SPH
     pinMode(PA8, OUTPUT);   //EPD_OE
     pinMode(PB6, OUTPUT);   //EPD_GMODE
     pinMode(PB15, OUTPUT);  //EPD_LE
-    */
     
-    pinMode(PD6, OUTPUT);   //EPD_CKV
-    pinMode(PD3, OUTPUT);   //EPD_SPV
-    pinMode(PG10, OUTPUT);  //EPD_SPH
-    pinMode(PB4, OUTPUT);   //EPD_OE
-    pinMode(PB6, OUTPUT);   //EPD_GMODE
-    pinMode(PB15, OUTPUT);  //EPD_LE
+    
+    //pinMode(PD6, OUTPUT);   //EPD_CKV
+    //pinMode(PD3, OUTPUT);   //EPD_SPV
+    //pinMode(PG10, OUTPUT);  //EPD_SPH
+    //pinMode(PB4, OUTPUT);   //EPD_OE
+    //pinMode(PB6, OUTPUT);   //EPD_GMODE
+    //pinMode(PB15, OUTPUT);  //EPD_LE
 
     // Not used anymore because of FMC
     // DATA PINS
@@ -338,13 +338,12 @@ void Inkplate::einkOn()
     Wire.endTransmission();
     pinsAsOutputs();
     LE_CLEAR;
-    OE_CLEAR;
     //CL_CLEAR;
     SPH_SET;
     GMOD_SET;
     SPV_SET;
     CKV_CLEAR;
-    OE_CLEAR;
+    OE_SET;
     VCOM_SET;
 
     unsigned long timer = millis();
@@ -360,8 +359,7 @@ void Inkplate::einkOn()
 		PWRUP_CLEAR;
 		return;
     }
-
-    OE_SET;
+	
     setPanelState(1);
 }
 
@@ -634,21 +632,20 @@ void Inkplate::pinsZstate()
     // CONTROL PINS
     //pinMode(PD11, INPUT);
     //PAXY Not Defined in Arduino IDE because of USB OTG and Ethernet on Nucleo Board! Switched to PB & PG port.
-    /*
+
     pinMode(PA0, INPUT);   //EPD_CKV
     pinMode(PA1, INPUT);   //EPD_SPV
     pinMode(PA2, INPUT);   //EPD_SPH
     pinMode(PA8, INPUT);   //EPD_OE
     pinMode(PB6, INPUT);   //EPD_GMODE
     pinMode(PB15, INPUT);  //EPD_LE
-    */
-    
-    pinMode(PD6, INPUT);   //EPD_CKV
-    pinMode(PD3, INPUT);   //EPD_SPV
-    pinMode(PG10, INPUT);  //EPD_SPH
-    pinMode(PB4, INPUT);   //EPD_OE
-    pinMode(PB6, INPUT);   //EPD_GMODE
-    pinMode(PB15, INPUT);  //EPD_LE
+	
+    //pinMode(PD6, INPUT);   //EPD_CKV
+    //pinMode(PD3, INPUT);   //EPD_SPV
+    //pinMode(PG10, INPUT);  //EPD_SPH
+    //pinMode(PB4, INPUT);   //EPD_OE
+    //pinMode(PB6, INPUT);   //EPD_GMODE
+    //pinMode(PB15, INPUT);  //EPD_LE
 
 
     // DATA PINS
@@ -667,21 +664,20 @@ void Inkplate::pinsAsOutputs()
     // CONTROL PINS
     //pinMode(PD11, OUTPUT);
     //PAXY Not Defined in Arduino IDE because of USB OTG and Ethernet on Nucleo Board! Switched to PB & PG port.
-    /*
-    pinMode(PA0, INPUT);   //EPD_CKV
-    pinMode(PA1, INPUT);   //EPD_SPV
-    pinMode(PA2, INPUT);   //EPD_SPH
-    pinMode(PA8, INPUT);   //EPD_OE
-    pinMode(PB6, INPUT);   //EPD_GMODE
-    pinMode(PB15, INPUT);  //EPD_LE
-    */
-    
-    pinMode(PD6, OUTPUT);   //EPD_CKV
-    pinMode(PD3, OUTPUT);   //EPD_SPV
-    pinMode(PG10, OUTPUT);  //EPD_SPH
-    pinMode(PB4, OUTPUT);   //EPD_OE
+	
+    pinMode(PA0, OUTPUT);   //EPD_CKV
+    pinMode(PA1, OUTPUT);   //EPD_SPV
+    pinMode(PA2, OUTPUT);   //EPD_SPH
+    pinMode(PA8, OUTPUT);   //EPD_OE
     pinMode(PB6, OUTPUT);   //EPD_GMODE
     pinMode(PB15, OUTPUT);  //EPD_LE
+    
+    //pinMode(PD6, OUTPUT);   //EPD_CKV
+    //pinMode(PD3, OUTPUT);   //EPD_SPV
+    //pinMode(PG10, OUTPUT);  //EPD_SPH
+    //pinMode(PB4, OUTPUT);   //EPD_OE
+    //pinMode(PB6, OUTPUT);   //EPD_GMODE
+    //pinMode(PB15, OUTPUT);  //EPD_LE
 
     // DATA PINS
     //pinMode(PD0, OUTPUT); //D0
@@ -972,11 +968,11 @@ int Inkplate::drawGrayscaleBitmap24(SdFile *f, struct bitmapHeader bmpHeader, in
 void Inkplate::stm32FmcInit()
 {
     // If you do not have SystemInit(), code freezes in SystemClock_Config2
-    SystemInit();
+    //SystemInit();
     // Push STM32 as high as possigle (480MHz Core clock, 480 MHz FMC)
-    SystemClock_Config2();
+    //SystemClock_Config2();
     // Update new Clock configuration
-    SystemCoreClockUpdate();
+    //SystemCoreClockUpdate();
   
     //  // If you using stock clck speeds you need to set clock used by FMC
     //  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
@@ -1036,9 +1032,9 @@ static void MX_FMC_Init(void)
     hsram2.Init.WriteFifo = FMC_WRITE_FIFO_DISABLE;                 // MUST BE DISABLED, OTHERWISE MESSES UP IMAGE ON EPD!
     hsram2.Init.PageSize = FMC_PAGE_SIZE_NONE;
     /* Timing */
-    Timing.AddressSetupTime = 15;
-    Timing.AddressHoldTime = 15;
-    Timing.DataSetupTime = 20;
+    Timing.AddressSetupTime = 2;
+    Timing.AddressHoldTime = 2;
+    Timing.DataSetupTime = 2;
     Timing.BusTurnAroundDuration = 0;
     Timing.CLKDivision = 16;
     Timing.DataLatency = 17;
@@ -1059,6 +1055,17 @@ static void HAL_FMC_MspInit(void)
         return;
     }
     FMC_Initialized = 1;
+	
+	  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
+    PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
 
     /* Peripheral clock enable */
     __HAL_RCC_FMC_CLK_ENABLE();
