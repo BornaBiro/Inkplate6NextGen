@@ -33,7 +33,7 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define INKPLATE_3BIT 		1
 #define TPS_SDA             PB9
 #define TPS_SCL             PB8
-#define FMC_ADDRESS         0xcc000000
+#define FMC_ADDRESS         (0x60000000 + (2 * 0x04000000))
 
 #define PWR_GOOD_OK         0b11111010
 
@@ -88,7 +88,6 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 
 extern SPIClass spi2;
 extern SdFat sd;
-static SRAM_HandleTypeDef hsram2;
 
 static void MX_FMC_Init(void);
 static uint32_t FMC_Initialized = 0;
