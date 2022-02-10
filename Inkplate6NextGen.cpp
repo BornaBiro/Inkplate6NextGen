@@ -86,25 +86,25 @@ void Inkplate::begin(void)
     //_partial = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
     //_pBuffer = (uint8_t*) ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 4);
     //D_memory4Bit = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
-    imageBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
-    partialBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
+    //imageBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
+    //partialBuffer = (uint8_t*)malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
     GLUT = (uint8_t*)malloc(256 * 25 * sizeof(uint8_t));
     GLUT2 = (uint8_t*)malloc(256 * 25 * sizeof(uint8_t));
-    if (imageBuffer == NULL || partialBuffer == NULL || GLUT == NULL || GLUT2 == NULL)
-    {
-        Serial.print("Memory alloc. fail");
-        do
-        {
-            delay(100);
-        }
-        while (true);
-    }
+    //if (imageBuffer == NULL || partialBuffer == NULL || GLUT == NULL || GLUT2 == NULL)
+    //{
+    //    Serial.print("Memory alloc. fail");
+    //    do
+    //    {
+    //        delay(100);
+    //    }
+    //    while (true);
+    //}
     //memset(D_memory_new, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
     //memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
     //memset(_pBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 4);
     //memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
-    memset(imageBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
-    memset(partialBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
+    //memset(imageBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
+    //memset(partialBuffer, _displayMode?255:0, E_INK_WIDTH * E_INK_HEIGHT / 2);
   
     for (int j = 0; j < 25; ++j) {
         for (uint32_t i = 0; i < 256; ++i) {
@@ -167,9 +167,9 @@ void Inkplate::clearDisplay()
 {
     // Clear 1 bit per pixel display buffer
     //if (_displayMode == 0) memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
-    if (_displayMode == 0) memset(partialBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
+    if (_displayMode == 0) memset((uint8_t*)partialBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
     // Clear 3 bit per pixel display buffer
-    if (_displayMode == 1) memset(imageBuffer, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
+    if (_displayMode == 1) memset((uint8_t*)imageBuffer, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
 }
 
 // Function that displays content from RAM to screen
@@ -197,8 +197,8 @@ void Inkplate::partialUpdate(uint8_t _leaveOn, uint16_t startRowPos, uint16_t en
     {
         vscan_start();
         rowSkip(E_INK_HEIGHT - endRowPos);
-        uint8_t *_pos = imageBuffer + (E_INK_WIDTH * endRowPos / 8) - 1;
-        uint8_t *_partialPos = partialBuffer  + (E_INK_WIDTH * endRowPos / 8) - 1;
+        uint8_t *_pos = (uint8_t*)(imageBuffer) + (E_INK_WIDTH * endRowPos / 8) - 1;
+        uint8_t *_partialPos = (uint8_t*)(partialBuffer)  + (E_INK_WIDTH * endRowPos / 8) - 1;
         
         for (int i = startRowPos; i < endRowPos; ++i)
         {
@@ -247,7 +247,7 @@ void Inkplate::partialUpdate(uint8_t _leaveOn, uint16_t startRowPos, uint16_t en
     for (int i = (E_INK_WIDTH * startRowPos / 8); i < (E_INK_WIDTH * endRowPos / 8); i++)
     {
         *(imageBuffer + i) &= *(partialBuffer + i);
-        *(imageBuffer + i) |= (*(partialBuffer + i));
+        *(imageBuffer + i) |= *(partialBuffer + i);
     }
 }
 
@@ -386,8 +386,8 @@ void Inkplate::selectDisplayMode(uint8_t _mode)
 	//}
     _displayMode = _mode & 1;
     _blockPartial = 1;
-    if (_displayMode == 0) memset(imageBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
-    if (_displayMode == 1) memset(imageBuffer, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
+    if (_displayMode == 0) memset((uint8_t*)imageBuffer, 0, E_INK_WIDTH * E_INK_HEIGHT / 8);
+    if (_displayMode == 1) memset((uint8_t*)imageBuffer, 255, E_INK_WIDTH * E_INK_HEIGHT / 2);
 }
 
 uint8_t Inkplate::getDisplayMode()
@@ -702,7 +702,7 @@ void Inkplate::display1b()
     
     for (int k = 0; k < 5; ++k)
     {
-        _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
+        _pos = (uint8_t*)imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; ++i)
         {
@@ -755,7 +755,7 @@ void Inkplate::display1b()
     
     for (int k = 0; k < 20; ++k)
     {
-        _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
+        _pos = (uint8_t*)imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; ++i)
         {
@@ -790,7 +790,7 @@ void Inkplate::display1b()
     cleanFast(2, 2);
     for (int k = 0; k < 20; ++k)
       {
-        _pos = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
+        _pos = (uint8_t*)imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; ++i)
         {
@@ -844,7 +844,7 @@ void Inkplate::display3b()
     for (int k = 0; k < 25; k++)
     {
         //uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);
-        uint8_t *dp = imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH/2);
+        uint8_t *dp = (uint8_t*)imageBuffer + (E_INK_HEIGHT * E_INK_WIDTH/2);
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; i++)
         {
@@ -1077,10 +1077,10 @@ static void MX_FMC_Init(void)
   hsram2.Init.WriteFifo = FMC_WRITE_FIFO_DISABLE;
   hsram2.Init.PageSize = FMC_PAGE_SIZE_NONE;
   /* Timing */
-  Timing.AddressSetupTime = 15;
-  Timing.AddressHoldTime = 15;
-  Timing.DataSetupTime = 255;
-  Timing.BusTurnAroundDuration = 15;
+  Timing.AddressSetupTime =2;
+  Timing.AddressHoldTime = 2;
+  Timing.DataSetupTime = 2;
+  Timing.BusTurnAroundDuration = 2;
   Timing.CLKDivision = 16;
   Timing.DataLatency = 17;
   Timing.AccessMode = FMC_ACCESS_MODE_A;

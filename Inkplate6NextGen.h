@@ -105,8 +105,10 @@ class Inkplate : public Adafruit_GFX {
     //uint8_t* _partial;
     //uint8_t* D_memory4Bit;
     //uint8_t * _pBuffer;
-    uint8_t *imageBuffer;
-    uint8_t *partialBuffer;
+    //uint8_t *imageBuffer;
+    //uint8_t *partialBuffer;
+	__IO uint8_t* imageBuffer = (__IO uint8_t*)0x60000000;
+	__IO uint8_t* partialBuffer = (__IO uint8_t*)0x61000000;
     uint8_t oneRow[200];
     const uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101, B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
     const uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010, B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
