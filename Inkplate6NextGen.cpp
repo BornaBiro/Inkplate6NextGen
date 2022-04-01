@@ -56,7 +56,7 @@ static void MX_FMC_Init(void)
     hsram1.Init.PageSize = FMC_PAGE_SIZE_NONE;
     /* Timing */
     Timing.AddressSetupTime = 0;
-    Timing.AddressHoldTime = 15;
+    Timing.AddressHoldTime = 0;
     Timing.DataSetupTime = 8; // ED060SC7
     // Timing.DataSetupTime = 4; // ED060KC1
     Timing.BusTurnAroundDuration = 0;
@@ -352,7 +352,7 @@ void Inkplate::begin(void)
 
     pinMode(PA0, OUTPUT);  // EPD_CKV
     pinMode(PA1, OUTPUT);  // EPD_SPV
-    pinMode(PC11, OUTPUT); // EPD_SPH
+    pinMode(PA2, OUTPUT); // EPD_SPH
     pinMode(PA8, OUTPUT);  // EPD_OE
     pinMode(PB6, OUTPUT);  // EPD_GMODE
     pinMode(PB15, OUTPUT); // EPD_LE
@@ -618,17 +618,16 @@ void Inkplate::einkOff()
     // CL_CLEAR;
 
     VCOM_CLEAR;
-    delay(6);
     PWRUP_CLEAR;
     WAKEUP_CLEAR;
     
     unsigned long timer = millis();
     do
     {
-        *(__IO uint8_t *)(FMC_ADDRESS) = 0;
-    } while ((readPowerGood() != 0) && (millis() - timer) < 250);
+		delay(1);
+    } while ((readPowerGood() != 0) && (millis() - timer) < 500);
 
-    // pinsZstate();
+    //pinsZstate();
     setPanelState(0);
 }
 
@@ -853,11 +852,11 @@ void Inkplate::hscan_start(uint8_t _d1, uint8_t _d2)
 void Inkplate::vscan_end()
 {
     CKV_CLEAR;
-    delayUS(1);
+    delayUS(0.5);
     LE_SET;
-    *(__IO uint8_t *)(FMC_ADDRESS) = 0xAA;
+    *(__IO uint8_t *)(FMC_ADDRESS) = 0;
     LE_CLEAR;
-    delayUS(4);
+    delayUS(0.5);
 }
 
 void Inkplate::rowSkip(uint16_t _n)
@@ -941,7 +940,7 @@ void Inkplate::pinsZstate()
 
     pinMode(PA0, INPUT);  // EPD_CKV
     pinMode(PA1, INPUT);  // EPD_SPV
-    pinMode(PC11, INPUT); // EPD_SPH
+    pinMode(PA2, INPUT); // EPD_SPH
     pinMode(PA8, INPUT);  // EPD_OE
     pinMode(PB6, INPUT);  // EPD_GMODE
     pinMode(PB15, INPUT); // EPD_LE
@@ -973,7 +972,7 @@ void Inkplate::pinsAsOutputs()
 
     pinMode(PA0, OUTPUT);  // EPD_CKV
     pinMode(PA1, OUTPUT);  // EPD_SPV
-    pinMode(PC11, OUTPUT); // EPD_SPH
+    pinMode(PA2, OUTPUT); // EPD_SPH
     pinMode(PA8, OUTPUT);  // EPD_OE
     pinMode(PB6, OUTPUT);  // EPD_GMODE
     pinMode(PB15, OUTPUT); // EPD_LE
@@ -1345,65 +1344,6 @@ void Inkplate::stm32FmcInit()
      * https://stackoverflow.com/questions/59198934/l1-cache-behaviour-of-stm32h7
      */
     // HAL_SetFMCMemorySwappingConfig(FMC_SWAPBMAP_SDRAM_SRAM);
-}
-
-static void SystemClock_Config2(void)
-{
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
-
-    /** Supply configuration update enable
-     */
-    HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
-    /** Configure the main internal regulator output voltage
-     */
-    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
-
-    while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY))
-    {
-    }
-    /** Initializes the CPU, AHB and APB busses clocks
-     */
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-    RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
-    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-    RCC_OscInitStruct.PLL.PLLM = 4;
-    RCC_OscInitStruct.PLL.PLLN = 60;
-    RCC_OscInitStruct.PLL.PLLP = 2;
-    RCC_OscInitStruct.PLL.PLLQ = 2;
-    RCC_OscInitStruct.PLL.PLLR = 2;
-    RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
-    RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
-    RCC_OscInitStruct.PLL.PLLFRACN = 0;
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /** Initializes the CPU, AHB and APB busses clocks
-     */
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 |
-                                  RCC_CLOCKTYPE_PCLK2 | RCC_CLOCKTYPE_D3PCLK1 | RCC_CLOCKTYPE_D1PCLK1;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
-    RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
-    RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
-
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
-    PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-    {
-        Error_Handler();
-    }
 }
 
 static void delayUS(float _t)

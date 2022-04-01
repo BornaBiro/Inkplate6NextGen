@@ -64,9 +64,9 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define CKV_SET   		{GPIOA -> BSRR = CKV;}
 #define CKV_CLEAR 		{GPIOA -> BSRR = CKV << 16;}
 
-#define SPH         	GPIO_PIN_11
-#define SPH_SET     	{GPIOC -> BSRR = SPH;}
-#define SPH_CLEAR   	{GPIOC -> BSRR = SPH << 16;}
+#define SPH         	GPIO_PIN_2
+#define SPH_SET     	{GPIOA -> BSRR = SPH;}
+#define SPH_CLEAR   	{GPIOA -> BSRR = SPH << 16;}
 
 #define GMOD            GPIO_PIN_6
 #define GMOD_SET    	{GPIOB -> BSRR = GMOD;}
