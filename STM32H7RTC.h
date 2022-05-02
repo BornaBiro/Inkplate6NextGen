@@ -25,7 +25,7 @@ class STM32RTC
     void setTime(uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _ss, uint8_t _pmAm = RTC_HOURFORMAT12_AM, uint32_t _dayLightSaving = RTC_DAYLIGHTSAVING_NONE);
     RTC_TimeTypeDef getTime(uint8_t *_h, uint8_t *_m, uint8_t *_s, uint32_t *_ss, uint8_t *_pmAm, uint32_t *_dayLightSaving);
     RTC_TimeTypeDef getTime();
-    void setDate(uint8_t _d, uint8_t _m, uint8_t _y, uint8_t _weekday);
+    void setDate(uint8_t _d, uint8_t _m, uint16_t _y, uint8_t _weekday);
     RTC_DateTypeDef getDate(uint8_t *_d, uint8_t *_m, uint8_t *_y, uint8_t *_weekday);
     RTC_DateTypeDef getDate();
     void enableAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _alarm, uint32_t _alarmMask, uint8_t _pmAm = RTC_HOURFORMAT12_AM, uint32_t _dayLightSaving = RTC_DAYLIGHTSAVING_NONE);

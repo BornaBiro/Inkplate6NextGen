@@ -121,10 +121,14 @@ class Inkplate : public Adafruit_GFX {
 	__IO uint8_t* partialBuffer = (__IO uint8_t*)0x6003A980;
 	//uint8_t* imageBuffer;
 	//uint8_t* partialBuffer;
+    //const uint8_t LUT2[16] = {B01010101, B01010110, B01011001, B01011010, B01100101, B01100110, B01101001, B01101010, B10010101, B10010110, B10011001, B10011010, B10100101, B10100110, B10101001, B10101010};
+    //const uint8_t LUTW[16] = {B10101010, B10101011, B10101110, B10101111, B10111010, B10111011, B10111110, B10111111, B11101010, B11101011, B11101110, B11101111, B11111010, B11111011, B11111110, B11111111};
+    //const uint8_t LUTB[16] = {B01010101, B01010111, B01011101, B01011111, B01110101, B01110111, B01111101, B01111111, B11010101, B11010111, B11011101, B11011111, B11110101, B11110111, B11111101, B11111111};
     const uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101, B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
     const uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010, B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
     const uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101, B01111111, B01111101, B01110111, B01110101, B01011111, B01011101, B01010111, B01010101};
-    const uint8_t pixelMaskLUT[8] = {B00000001, B00000010, B00000100, B00001000, B00010000, B00100000, B01000000, B10000000};
+
+    const uint8_t pixelMaskLUT[8] = {B10000000, B01000000, B00100000, B00010000, B00001000, B00000100, B00000010, B00000001};
     const uint8_t pixelMaskGLUT[2] = {B11110000, B00001111};
     const uint8_t discharge[16] = {B11111111, B11111100, B11110011, B11110000, B11001111, B11001100, B11000011, B11000000, B00111111, B00111100, B00110011, B00110000, B00001111, B00001100, B00000011, B00000000};
     //BLACK->WHITE
@@ -189,7 +193,7 @@ class Inkplate : public Adafruit_GFX {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2},
     };
     uint8_t* GLUT;
     uint8_t* GLUT2;
@@ -209,9 +213,10 @@ class Inkplate : public Adafruit_GFX {
 	void begin(void);
     void drawPixel(int16_t x0, int16_t y0, uint16_t color);
     void clearDisplay();
-    void display(bool _clear = true);
-    void partialUpdate(uint8_t leaveOn = 0, uint16_t startRowPos = 0, uint16_t endRowPos = 600);
-	void drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char* _p, int16_t _w, int16_t _h);
+    void display(uint8_t _leaveOn = false);
+    void partialUpdate(uint8_t _leaveOn = 0, uint16_t startRowPos = 0, uint16_t endRowPos = 600);
+	void partialUpdate4Bit(uint8_t _leaveOn = 0);
+    void drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char* _p, int16_t _w, int16_t _h);
 	void setRotation(uint8_t);
     void einkOff(void);
     void einkOn(void);
@@ -246,8 +251,8 @@ class Inkplate : public Adafruit_GFX {
 	uint8_t _blockPartial = 1;
 	uint8_t _beginDone = 0;
 	
-	void display1b();
-    void display3b(bool _clear);
+	void display1b(uint8_t _leaveOn);
+    void display3b(uint8_t _leaveOn);
 	uint32_t read32(uint8_t* c);
 	uint16_t read16(uint8_t* c);
 	void readBmpHeader(SdFile *_f, struct bitmapHeader *_h);
