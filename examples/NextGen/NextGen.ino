@@ -1,5 +1,9 @@
 #include <Inkplate6NextGen.h>
-#include "image4.h"
+#include "imageP1.h"
+#include "imageP2.h"
+#include "icons.h"
+
+//#define USE_DEEP_SLEEP
 
 Inkplate display(INKPLATE_3BIT);
 HardwareSerial mySerial(USART1);
@@ -58,47 +62,101 @@ void setup() {
   //  pinMode(PD5, OUTPUT);
   //  pinMode(PE0, OUTPUT);
   //  pinMode(PE1, OUTPUT);
-
+  unsigned long t1, t2;
   display.begin();
   display.clearDisplay();
-  display.drawRect(0, 0, 800 , 600, 0);
-  display.drawRect(0, 0, 7, 7, 0);
-  display.drawRect(795, 0, 5, 5, 0);
-  display.drawRect(0, 593, 7, 7, 0);
-  display.drawRect(795, 595, 5, 5, 0);
+
+  display.fillRect(100, 100, 300, 300, 10);
+  display.drawLine(0, 599, 400, 599, 5);
+  t1 = micros();
+  display.display();
+  t2 = micros();
+  mySerial.println(t2 - t1, DEC);
+
+  delay(2500);
+  display.drawLine(0, 0, 200, 0, 4);
+  display.fillRect(200, 200, 300, 300, 13);
+  display.drawLine(100, 100, 300, 200, 5);
+  display.drawLine(0, 599, 400, 599, 15);
+  display.einkOn();
+  t1 = micros();
+  display.partialUpdate4Bit();
+  t2 = micros();
+  mySerial.println(t2 - t1, DEC);
+  delay(2500);
+
+  display.fillRect(300, 300, 300, 300, 15);
+  display.partialUpdate4Bit();
+
+  delay(2500);
+
+  display.clearDisplay();
+  display.drawBitmap3Bit(300, 300, icon1, icon1_w, icon1_h);
+  display.partialUpdate4Bit();
+
+  delay(2500);
+
+  display.drawBitmap3Bit(300, 300, icon2, icon2_w, icon2_h);
+  display.partialUpdate4Bit();
+
+  delay(2500);
+
+  display.clearDisplay();
+
+  display.setTextSize(4);
+  display.setTextColor(10, 15);
   display.setCursor(100, 100);
-  display.setTextColor(0);
-  display.print("Hello!");
-
-  for (int i = 0; i < display.width(); i += 3)
-  {
-    display.drawPixel(i, 550, 0);
-  }
-
-  display.display();
+  display.print("This is test");
+  display.partialUpdate4Bit();
 
   delay(2500);
-
-  for (int i = 0; i < 15; i++)
-  {
-    display.fillRect(i * 40 + 20, 20, 40, 400, i);
-  }
-
-  display.display();
-
+  display.setTextColor(14, 15);
+  display.setCursor(100, 100);
+  display.print("Old text cleaned with partial update");
+  display.partialUpdate4Bit();
   delay(2500);
-  //
-  display.drawBitmap3Bit(0, 0, img4, img4_w, img4_h);
-  display.display();
 
+  display.clearDisplay();
+  display.drawBitmap3Bit(100, 100, imagePartial2, imagePartial2_w, imagePartial2_h);
+  display.partialUpdate4Bit();
+  delay(2500);
 
-  //  delay(1500);
-  //
-  //  Serial.println("Did I crash?");
-  //  display.flipWaveform();
-  //  Serial.println("Maybe??");
-  //  display.display(false);
-  //  Serial.println("Nope...");
+  display.clearDisplay();
+  display.drawBitmap3Bit(300, 200, imagePartial1, imagePartial1_w, imagePartial1_h);
+  display.partialUpdate4Bit();
+  delay(2500);
+  
+  mySerial.println("Done!");
+  
+  //display.drawRect(0, 0, 800 , 600, 0);
+  //display.drawRect(0, 0, 7, 7, 0);
+  //display.drawRect(795, 0, 5, 5, 0);
+  //display.drawRect(0, 593, 7, 7, 0);
+  //display.drawRect(795, 595, 5, 5, 0);
+  //display.setCursor(100, 100);
+  //display.setTextColor(0);
+  //display.print("Hello!");
+
+  //for (int i = 0; i < display.width(); i += 3)
+  //{
+  //  display.drawPixel(i, 550, 0);
+  //}
+
+  //display.display();
+
+  //delay(2500);
+
+  //for (int i = 0; i < 15; i++)
+  //{
+  //  display.fillRect(i * 40 + 20, 20, 40, 400, i);
+  //}
+
+  //display.display();
+
+  //delay(2500);
+  //display.drawBitmap3Bit(0, 0, img4, img4_w, img4_h);
+  //display.display();
+
 
   //  unsigned long t1, t2 = 0;
   //  uint8_t dummy;
@@ -122,7 +180,9 @@ void setup() {
   //  mySerial.print("Read time: ");
   //  mySerial.print(1.0 / ((float)(t2 - t1) * 1E-6), 4);
   //  mySerial.println("MB/s");
-    // Disable USB voltage detection on USB OTG (This causes high current consumption in sleep!)
+
+  #ifdef USE_DEEP_SLEEP
+  // Disable USB voltage detection on USB OTG (This causes high current consumption in sleep!)
   HAL_PWREx_DisableUSBVoltageDetector();
 
   // Use different voltage scale for internal voltage regulator (lower current consumption in sleep mode)
@@ -130,10 +190,11 @@ void setup() {
 
   HAL_SRAM_DeInit(&hsram1);
   HAL_SRAM_DeInit(&hsram2);
-//  
+  //
   HAL_PWREx_EnterSTANDBYMode(PWR_D3_DOMAIN);
   HAL_PWREx_EnterSTANDBYMode(PWR_D2_DOMAIN);
   HAL_PWREx_EnterSTANDBYMode(PWR_D1_DOMAIN);
+  #endif
 }
 
 void loop() {

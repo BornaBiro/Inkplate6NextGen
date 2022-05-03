@@ -591,8 +591,40 @@ void Inkplate::partialUpdate(uint8_t _leaveOn, uint16_t startRowPos, uint16_t en
 
 void Inkplate::partialUpdate4Bit(uint8_t _leaveOn)
 {
-    const uint8_t _cleanWaveform[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
+    //uint8_t _cleanWaveform[16][15] = {	
+	//    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    //    {1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2},
+    //};
+
+    const uint8_t _cleanWaveform[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
+    uint8_t _panelMask[120000];
+    uint8_t *_pPanelMask = _panelMask;
+    memset(_panelMask, 0, sizeof(_panelMask));
+    
+
+    //for (int j = 0; j < 15; ++j)
+    //{
+    //    for (uint32_t i = 0; i < 256; ++i)
+    //    {
+    //        GLUT[j * 256 + i] = (_cleanWaveform[i & 0x0f][j] << 2) | (_cleanWaveform[(i >> 4) & 0x0f][j]);
+    //        GLUT2[j * 256 + i] = ((_cleanWaveform[i & 0x0f][j] << 2) | (_cleanWaveform[(i >> 4) & 0x0f][j])) << 4;
+    //    }
+    //}
     // if (_displayMode != 1) return;
     // if (_blockPartial == 1)
     //{
@@ -601,122 +633,78 @@ void Inkplate::partialUpdate4Bit(uint8_t _leaveOn)
     // }
     
     // We present you the ugliest code ever...needs A LOT of clean up and optimisation!
-    einkOn();
-    for (int k = 0; k < 20; k++)
+
+    // Create the mask for pixel difference
+    __IO uint8_t *_pPartial = partialBuffer;
+    __IO uint8_t *_pImage = imageBuffer;
+    for (int i = 0; i < 600; i++)
     {
-        __IO uint8_t *_pPartial = partialBuffer;
-        __IO uint8_t *_pImage = imageBuffer;
+        for (int j = 0; j < 200; j++) // Now do all that for whole row
+        {
+            uint8_t _diff = *_pPartial++ ^ *_pImage++;
+            if (_diff & (0xf0)) *_pPanelMask |= 0x30;
+            if (_diff & (0x0f)) *_pPanelMask |= 0xc0;
+            _diff = *_pPartial++ ^ *_pImage++;
+            if (_diff & (0xf0)) *_pPanelMask |= 0x03;
+            if (_diff & (0x0f)) *_pPanelMask |= 0x0c;
+            _pPanelMask++;
+        }
+    }
+
+    //einkOn();
+    for (int k = 0; k < 60; k++)
+    {   
+        _pPanelMask = _panelMask;
+        uint8_t _color = _cleanWaveform[k]==1?0b01010101:0b10101010;
         vscan_start();
+        vscan_end();
         for (int i = 0; i < 600; i++)
         {
-            uint8_t _diff = *(_pPartial++) ^ *(_pImage++);
-            uint8_t _out[2] = {0, 0};
-            if (_diff & (0x0f)) _out[0] |= _cleanWaveform[k] << 6;
-            if (_diff & (0xf0)) _out[0] |= _cleanWaveform[k] << 4;
-            _diff = *(_pPartial++) ^ *(_pImage++);
-            if (_diff & (0x0f)) _out[0] |= _cleanWaveform[k] << 2;
-            if (_diff & (0xf0)) _out[0] |= _cleanWaveform[k];
-            _diff = *(_pPartial++) ^ *(_pImage++);
-            if (_diff & (0x0f)) _out[1] |= _cleanWaveform[k] << 6;
-            if (_diff & (0xf0)) _out[1] |= _cleanWaveform[k] << 4;
-            _diff = *(_pPartial++) ^ *(_pImage++);
-            if (_diff & (0x0f)) _out[1] |= _cleanWaveform[k] << 2;
-            if (_diff & (0xf0)) _out[1] |= _cleanWaveform[k];
-
-            hscan_start(_out[0], _out[1]); // Start sending first pixel byte to panel
+            hscan_start(_color & *_pPanelMask++, _color & *_pPanelMask++); // Start sending first pixel byte to panel
 
             for (int j = 0; j < 99; j++) // Now do all that for whole row
             {
-                _out[0] = 0;
-                _out[1] = 0;
-                _diff = *(_pPartial++) ^ *(_pImage++);
-                if (_diff & (0x0f)) _out[0] |= _cleanWaveform[k] << 6;
-                if (_diff & (0xf0)) _out[0] |= _cleanWaveform[k] << 4;
-                _diff = *(_pPartial++) ^ *(_pImage++);
-                if (_diff & (0x0f)) _out[0] |= _cleanWaveform[k] << 2;
-                if (_diff & (0xf0)) _out[0] |= _cleanWaveform[k];
-                _diff = *(_pPartial++) ^ *(_pImage++);
-                if (_diff & (0x0f)) _out[1] |= _cleanWaveform[k] << 6;
-                if (_diff & (0xf0)) _out[1] |= _cleanWaveform[k] << 4;
-                _diff = *(_pPartial++) ^ *(_pImage++);
-                if (_diff & (0x0f)) _out[1] |= _cleanWaveform[k] << 2;
-                if (_diff & (0xf0)) _out[1] |= _cleanWaveform[k];
-
-                *(__IO uint8_t *)(FMC_ADDRESS) = _out[0];
-                *(__IO uint8_t *)(FMC_ADDRESS) = _out[1];
+                *(__IO uint8_t *)(FMC_ADDRESS) = _color & *_pPanelMask++;
+                *(__IO uint8_t *)(FMC_ADDRESS) = _color & *_pPanelMask++;
             }
             vscan_end(); // Write one row to panel
         }
         delayMicroseconds(230); // Wait 230uS before new frame
     }
 
+    //for (int j = 0; j < 15; ++j)
+    //{
+    //    for (uint32_t i = 0; i < 256; ++i)
+    //    {
+    //        GLUT[j * 256 + i] = (waveform3Bit2[i & 0x0f][j] << 2) | (waveform3Bit2[(i >> 4) & 0x0f][j]);
+    //        GLUT2[j * 256 + i] = ((waveform3Bit2[i & 0x0f][j] << 2) | (waveform3Bit2[(i >> 4) & 0x0f][j])) << 4;
+    //    }
+    //}
+
     for (int k = 0; k < 15; k++)
     {
-        __IO uint8_t *_pPartial = partialBuffer;
-        __IO uint8_t *_pImage = imageBuffer;
+        __IO uint8_t *dp = partialBuffer;
+        _pPanelMask = _panelMask;
         vscan_start();
-        for (int i = 0; i < 600; i++)
+        vscan_end();
+        for (int i = 0; i < E_INK_HEIGHT; i++)
         {
-            uint8_t _diff = (*_pPartial) ^ (*_pImage);
-            uint8_t _out[2] = {0, 0};
-            if (_diff & (0x0f)) _out[0] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 6;
-            if (_diff & (0xf0)) _out[0] |= waveform3Bit2[(*_pPartial) >> 4 & 0x0f][k] << 4;
-            _pPartial++;
-            _pImage++;
-            _diff = (*_pPartial) ^ (*_pImage);
-            if (_diff & (0x0f)) _out[0] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 2;
-            if (_diff & (0xf0)) _out[0] |= waveform3Bit2[(*_pPartial) >> 4 & 0x0f][k];
-            _pPartial++;
-            _pImage++;
-            _diff = (*_pPartial) ^ (*_pImage);
-            if (_diff & (0x0f)) _out[1] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 6;
-            if (_diff & (0xf0)) _out[1] |= waveform3Bit2[(*_pPartial) >> 4 & 0x0f][k] << 4;
-            _pPartial++;
-            _pImage++;
-            _diff = (*_pPartial) ^ (*_pImage);
-            if (_diff & (0x0f)) _out[1] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 2;
-            if (_diff & (0xf0)) _out[1] |= waveform3Bit2[(*_pPartial) >> 4 & 0x0f][k];
-            _pPartial++;
-            _pImage++;
-
-            hscan_start(_out[0], _out[1]); // Start sending first pixel byte to panel
-
-            for (int j = 0; j < 99; j++) // Now do all that for whole row
+            hscan_start((GLUT2[k * 256 + (*(dp++))] | GLUT[k * 256 + (*(dp++))]) & *(_pPanelMask++),
+                        (GLUT2[k * 256 + (*(dp++))] | GLUT[k * 256 + (*(dp++))]) & *(_pPanelMask++));
+            for (int j = 0; j < ((E_INK_WIDTH / 8)) - 1; j++)
             {
-                _out[0] = 0;
-                _out[1] = 0;
-                _diff = (*_pPartial) ^ (*_pImage);
-                if (_diff & (0x0f)) _out[0] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 6;
-                if (_diff & (0xf0)) _out[0] |= waveform3Bit2[((*_pPartial) >> 4) & 0x0f][k] << 4;
-                _pPartial++;
-                _pImage++;
-                _diff = (*_pPartial) ^ (*_pImage);
-                if (_diff & (0x0f)) _out[0] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 2;
-                if (_diff & (0xf0)) _out[0] |= waveform3Bit2[((*_pPartial) >> 4) & 0x0f][k];
-                _pPartial++;
-                _pImage++;
-                _diff = (*_pPartial) ^ (*_pImage);
-                if (_diff & (0x0f)) _out[1] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 6;
-                if (_diff & (0xf0)) _out[1] |= waveform3Bit2[((*_pPartial) >> 4) & 0x0f][k] << 4;
-                _pPartial++;
-                _pImage++;
-                _diff = (*_pPartial) ^ (*_pImage);
-                if (_diff & (0x0f)) _out[1] |= waveform3Bit2[(*_pPartial) & 0x0f][k] << 2;
-                if (_diff & (0xf0)) _out[1] |= waveform3Bit2[((*_pPartial) >> 4) & 0x0f][k];
-                _pPartial++;
-                _pImage++;
-
-                *(__IO uint8_t *)(FMC_ADDRESS) = _out[0];
-                *(__IO uint8_t *)(FMC_ADDRESS) = _out[1];
-            }
-            vscan_end(); // Vrite one row to panel
+    
+                *(__IO uint8_t *)(FMC_ADDRESS) = (GLUT2[k * 256 + (*(dp++))] | GLUT[k * 256 + (*(dp++))]) & *(_pPanelMask++);
+                *(__IO uint8_t *)(FMC_ADDRESS) = (GLUT2[k * 256 + (*(dp++))] | GLUT[k * 256 + (*(dp++))]) & *(_pPanelMask++);
+           }
+            vscan_end();
         }
-        delayMicroseconds(230); // Wait 230uS before new frame
+        delayMicroseconds(230);
     }
-
     cleanFast(2, 1);
-    if (!_leaveOn)
-        einkOff();
+
+    //if (!_leaveOn)
+    //    einkOff();
 
     for (int i = 0; i < (E_INK_HEIGHT * E_INK_WIDTH) / 2; i++)
     {
