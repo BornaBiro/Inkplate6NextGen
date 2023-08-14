@@ -2,27 +2,61 @@
 
 STM32RTC::STM32RTC()
 {
-    
 }
 
 //-------------------Library Functions----------------------------------
 RTC_HandleTypeDef STM32RTC::begin(uint8_t _format, bool _resetRtc)
 {
-    //RCC_PeriphCLKInitTypeDef PeriphClkInit;
-    //enableClock(LSE_CLOCK);
-    //PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    //PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-    //if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
-    //    Error_Handler();
-    //}
-    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    // RCC_PeriphCLKInitTypeDef PeriphClkInit;
+    // enableClock(LSE_CLOCK);
+    // PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    // PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+    // if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
+    //     Error_Handler();
+    // }
+    extern HardwareSerial mainSerial;
+
+    // Enable backup domain (needed for RTC).
+    HAL_PWR_EnableBkUpAccess();
+
+    // Set highest drive for xtal (consumes little bit more power, but RTC should be more stable).
+    __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_HIGH);
+
+    // Get the current setup for oscillators.
+    RCC_OscInitTypeDef _oscConfig = {0};
+
+    // Modify part for the LSE.
+    _oscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE;
+    _oscConfig.LSEState = RCC_LSE_ON;
+
+    // // Update the settings.
+    if (HAL_RCC_OscConfig(&_oscConfig) != HAL_OK)
     {
-      Error_Handler();
+        mainSerial.println("Clock update config failed!");
+        Error_Handler();
     }
 
+    enableClock(LSE_CLOCK);
+    RCC_PeriphCLKInitTypeDef PeriphClkInit;
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    {
+        mainSerial.println("How about no...");
+        Error_Handler();
+    }
+
+    // mainSerial.println("Yoooooo!");
+    // RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+    // PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    // PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+    // mainSerial.println("Here2?");
+    // if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    // {
+    //   Error_Handler();
+    // }
+
+    // mainSerial.println("Here3?");
     __HAL_RCC_RTC_ENABLE();
     RTC_TimeTypeDef sTime = {0};
     RTC_DateTypeDef sDate = {0};
@@ -40,7 +74,8 @@ RTC_HandleTypeDef STM32RTC::begin(uint8_t _format, bool _resetRtc)
         Error_Handler();
     }
 
-    if (!_resetRtc && isTimeSet()) return hrtc;
+    if (!_resetRtc && isTimeSet())
+        return hrtc;
 
     enableBackupDomain();
     HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_INDEX, 0);
@@ -79,7 +114,8 @@ void STM32RTC::setTime(uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _ss, uint8_t
     HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_INDEX, RTC_BKP_VALUE);
 }
 
-RTC_TimeTypeDef STM32RTC::getTime(uint8_t *_h, uint8_t *_m, uint8_t *_s, uint32_t *_ss, uint8_t *_pmAm, uint32_t *_dayLightSaving)
+RTC_TimeTypeDef STM32RTC::getTime(uint8_t *_h, uint8_t *_m, uint8_t *_s, uint32_t *_ss, uint8_t *_pmAm,
+                                  uint32_t *_dayLightSaving)
 {
     RTC_TimeTypeDef myTime = {0};
     RTC_DateTypeDef myDate = {0};
@@ -88,9 +124,12 @@ RTC_TimeTypeDef STM32RTC::getTime(uint8_t *_h, uint8_t *_m, uint8_t *_s, uint32_
     *_h = myTime.Hours;
     *_m = myTime.Minutes;
     *_s = myTime.Seconds;
-    if(_ss != NULL) *_ss = myTime.SubSeconds;
-    if(_pmAm != NULL) *_pmAm = myTime.TimeFormat;
-    if(_pmAm != NULL) *_dayLightSaving = myTime.DayLightSaving;
+    if (_ss != NULL)
+        *_ss = myTime.SubSeconds;
+    if (_pmAm != NULL)
+        *_pmAm = myTime.TimeFormat;
+    if (_pmAm != NULL)
+        *_dayLightSaving = myTime.DayLightSaving;
     return myTime;
 }
 
@@ -129,7 +168,8 @@ RTC_DateTypeDef STM32RTC::getDate()
     return getDate(&dummy, &dummy, &dummy, &dummy);
 }
 
-void STM32RTC::enableAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _alarm, uint32_t _alarmMask, uint8_t _pmAm, uint32_t _dayLightSaving)
+void STM32RTC::enableAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _alarm, uint32_t _alarmMask,
+                           uint8_t _pmAm, uint32_t _dayLightSaving)
 {
     RTC_AlarmTypeDef myAlarm = {0};
     myAlarm.AlarmTime.Hours = _h;
@@ -165,7 +205,8 @@ void STM32RTC::disableAlarmInterrupt()
     userFcn = NULL;
 }
 
-void STM32RTC::enableSimpleAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _alarm, uint32_t _alarmMask, uint8_t _pmAm, uint32_t _dayLightSaving)
+void STM32RTC::enableSimpleAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s, uint32_t _alarm, uint32_t _alarmMask,
+                                 uint8_t _pmAm, uint32_t _dayLightSaving)
 {
     RTC_AlarmTypeDef myAlarm = {0};
     myAlarm.AlarmTime.Hours = _h;
@@ -185,11 +226,13 @@ void STM32RTC::enableSimpleAlarm(uint8_t _d, uint8_t _h, uint8_t _m, uint8_t _s,
 bool STM32RTC::checkForAlarm(bool _clearFlag)
 {
     bool _r = (__HAL_RTC_ALARM_GET_FLAG(&hrtc, RTC_FLAG_ALRAF)) == 0 ? false : true;
-    if (_r && _clearFlag) __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
+    if (_r && _clearFlag)
+        __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
     return _r;
 }
 
-RTC_AlarmTypeDef STM32RTC::getAlarm(uint8_t *_d, uint8_t *_h, uint8_t *_m, uint8_t *_s, uint32_t _alarm, uint32_t *_alarmMask, uint8_t *_pmAm, uint32_t *_dayLightSaving)
+RTC_AlarmTypeDef STM32RTC::getAlarm(uint8_t *_d, uint8_t *_h, uint8_t *_m, uint8_t *_s, uint32_t _alarm,
+                                    uint32_t *_alarmMask, uint8_t *_pmAm, uint32_t *_dayLightSaving)
 {
     RTC_AlarmTypeDef myAlarm = {0};
     HAL_RTC_GetAlarm(&hrtc, &myAlarm, _alarm, RTC_FORMAT);
@@ -210,7 +253,7 @@ RTC_AlarmTypeDef STM32RTC::getAlarm()
     return getAlarm(&dummy1, &dummy1, &dummy1, &dummy1, dummy2, &dummy2, &dummy1, &dummy2);
 }
 
-//RTC_OUTPUT_ALARMA, RTC_OUTPUT_ALARMB or RTC_OUTPUT_DISABLE for _alarm
+// RTC_OUTPUT_ALARMA, RTC_OUTPUT_ALARMB or RTC_OUTPUT_DISABLE for _alarm
 void STM32RTC::setAlarmOutput(bool _outEn, uint32_t _alarm)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -239,13 +282,14 @@ void STM32RTC::setAlarmOutput(bool _outEn, uint32_t _alarm)
 
 bool STM32RTC::isTimeSet()
 {
-    return (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_INDEX) == RTC_BKP_VALUE)?true:false;
+    return (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_INDEX) == RTC_BKP_VALUE) ? true : false;
 }
 
 extern "C" void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
     UNUSED(hrtc);
-    if (userFcn != NULL) (*userFcn)();
+    if (userFcn != NULL)
+        (*userFcn)();
 }
 
 extern "C" void RTC_Alarm_IRQHandler(void)
@@ -253,14 +297,14 @@ extern "C" void RTC_Alarm_IRQHandler(void)
     HAL_RTC_AlarmIRQHandler(&hrtc);
 }
 
-extern "C" void HAL_RTC_MspInit(RTC_HandleTypeDef* hrtc)
+extern "C" void HAL_RTC_MspInit(RTC_HandleTypeDef *hrtc)
 {
     if (hrtc->Instance == RTC)
     {
         __HAL_RCC_RTC_ENABLE();
     }
 }
-extern "C" void HAL_RTC_MspDeInit(RTC_HandleTypeDef* hrtc)
+extern "C" void HAL_RTC_MspDeInit(RTC_HandleTypeDef *hrtc)
 {
     if (hrtc->Instance == RTC)
     {
