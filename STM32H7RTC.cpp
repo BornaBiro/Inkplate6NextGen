@@ -8,13 +8,21 @@ STM32RTC::STM32RTC()
 //-------------------Library Functions----------------------------------
 RTC_HandleTypeDef STM32RTC::begin(uint8_t _format, bool _resetRtc)
 {
-    RCC_PeriphCLKInitTypeDef PeriphClkInit;
-    enableClock(LSE_CLOCK);
-    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
-        Error_Handler();
+    //RCC_PeriphCLKInitTypeDef PeriphClkInit;
+    //enableClock(LSE_CLOCK);
+    //PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    //PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+    //if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
+    //    Error_Handler();
+    //}
+    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
     }
+
     __HAL_RCC_RTC_ENABLE();
     RTC_TimeTypeDef sTime = {0};
     RTC_DateTypeDef sDate = {0};
@@ -93,13 +101,13 @@ RTC_TimeTypeDef STM32RTC::getTime()
     return getTime(&dummy1, &dummy1, &dummy1, &dummy2, &dummy1, &dummy2);
 }
 
-void STM32RTC::setDate(uint8_t _d, uint8_t _m, uint8_t _y, uint8_t _weekday)
+void STM32RTC::setDate(uint8_t _d, uint8_t _m, uint16_t _y, uint8_t _weekday)
 {
     RTC_DateTypeDef myDate = {0};
-    myDate.WeekDay = RTC_WEEKDAY_MONDAY;
+    myDate.WeekDay = _weekday;
     myDate.Month = _m;
     myDate.Date = _d;
-    myDate.Year = _y;
+    myDate.Year = (uint8_t)(_y % 100);
     HAL_RTC_SetDate(&hrtc, &myDate, RTC_FORMAT);
     HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_INDEX, RTC_BKP_VALUE);
 }
