@@ -11,15 +11,23 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
  ****************************************************/
 
 #include <stdlib.h>
-
 #include "Inkplate6NextGen.h"
+
+    // __attribute__((section(".DTCMRAM_section"))) uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101,
+    //                           B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
+    // __attribute__((section(".DTCMRAM_section"))) uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010,
+    //                           B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
+    // __attribute__((section(".DTCMRAM_section"))) uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101,
+    //                           B01111111, B01111101, B01110111, B01110101, B01011111, B01011101, B01010111, B01010101};
+
+
+
 // SPIClass spi2(HSPI);
 SdFat sd(&SPI);
 SRAM_HandleTypeDef hsram1;
 SRAM_HandleTypeDef hsram2;
 static uint32_t FMC_Initialized = 0;
 static uint32_t FMC_DeInitialized = 0;
-extern HardwareSerial mainSerial;
 
 //--------------------------USER FUNCTIONS--------------------------------------------
 Inkplate::Inkplate(uint8_t _mode) : Adafruit_GFX(E_INK_WIDTH, E_INK_HEIGHT)
@@ -205,9 +213,7 @@ void Inkplate::partialUpdate(uint8_t _leaveOn, uint16_t startRowPos, uint16_t en
                 *(__IO uint8_t *)(FMC_ADDRESS) = LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F]);
             }
             vscan_end(); // Vrite one row to panel
-            rowSkip(1);
         }
-        delayMicroseconds(230); // Wait 230uS before new frame
     }
 
     cleanFast(2, 1);
@@ -215,10 +221,9 @@ void Inkplate::partialUpdate(uint8_t _leaveOn, uint16_t startRowPos, uint16_t en
         einkOff();
 
     // After update, copy differences to screen buffer
-    for (int i = (E_INK_WIDTH * startRowPos / 8); i < (E_INK_WIDTH * endRowPos / 8); i++)
+    for (int i = 0; i < (E_INK_HEIGHT * E_INK_WIDTH / 8); i++)
     {
-        *(imageBuffer + i) &= *(partialBuffer + i);
-        *(imageBuffer + i) |= *(partialBuffer + i);
+        *(imageBuffer + i) = *(partialBuffer + i);
     }
 }
 
@@ -401,10 +406,6 @@ void Inkplate::einkOn()
     Wire.write(0x01);
     Wire.write(B00111111);
     Wire.endTransmission();
-    Wire.beginTransmission(0x48);
-    Wire.write(0x03);
-    Wire.write(135); // VCOM in mV
-    Wire.endTransmission();
     pinsAsOutputs();
     LE_CLEAR;
     SPH_SET;
@@ -567,48 +568,7 @@ double Inkplate::readBattery()
 }
 
 //--------------------------LOW LEVEL STUFF--------------------------------------------
-void Inkplate::vscan_start()
-{
-    CKV_SET;
-    delayMicroseconds(7);
-    SPV_CLEAR;
-    delayMicroseconds(10);
-    CKV_CLEAR;
-    delayMicroseconds(1);
-    CKV_SET;
-    delayMicroseconds(8);
-    SPV_SET;
-    delayMicroseconds(10);
-    CKV_CLEAR;
-    delayMicroseconds(1);
-    CKV_SET;
-    delayMicroseconds(18);
-    CKV_CLEAR;
-    delayMicroseconds(1);
-    CKV_SET;
-    delayMicroseconds(18);
-    CKV_CLEAR;
-}
 
-void Inkplate::hscan_start(uint8_t _d1, uint8_t _d2)
-{
-    SPH_CLEAR;
-    CKV_SET;
-    *(__IO uint8_t *)(FMC_ADDRESS) = _d1;
-    delayUS(0.4);
-    SPH_SET;
-    *(__IO uint8_t *)(FMC_ADDRESS) = _d2;
-}
-
-void Inkplate::vscan_end()
-{
-    CKV_CLEAR;
-    delayUS(0.5);
-    LE_SET;
-    *(__IO uint8_t *)(FMC_ADDRESS) = 0;
-    LE_CLEAR;
-    delayUS(0.5);
-}
 
 void Inkplate::rowSkip(uint16_t _n)
 {
@@ -782,6 +742,8 @@ void Inkplate::display1b(uint8_t _leaveOn)
 // wavefrom to get good picture, use it only for pictures not for GFX).
 void Inkplate::display3b(uint8_t _leaveOn)
 {
+    DEBUG_MSG("display3 bit start");
+
     // Full update? Copy everything in screen buffer before refresh!
     for (int i = 0; i < (E_INK_HEIGHT * E_INK_WIDTH) / 2; i++)
     {
@@ -796,6 +758,10 @@ void Inkplate::display3b(uint8_t _leaveOn)
     cleanFast(1, 30);
     cleanFast(0, 30);
     cleanFast(2, 1);
+
+    uint8_t _oneLine[800];
+
+
 
     for (int k = 0; k < 15; k++)
     {
@@ -819,6 +785,8 @@ void Inkplate::display3b(uint8_t _leaveOn)
     // vscan_start();
     if (!_leaveOn)
         einkOff();
+    
+    DEBUG_MSG("display3 bit done");
 }
 
 uint32_t Inkplate::read32(uint8_t *c)
@@ -923,6 +891,7 @@ static void MX_FMC_Init(void)
     /* USER CODE END FMC_Init 0 */
 
     FMC_NORSRAM_TimingTypeDef Timing = {0};
+    FMC_NORSRAM_TimingTypeDef ExtTiming = {0};
 
     /* USER CODE BEGIN FMC_Init 1 */
 
@@ -979,19 +948,26 @@ static void MX_FMC_Init(void)
     hsram2.Init.WaitSignal = FMC_WAIT_SIGNAL_DISABLE;
     hsram2.Init.ExtendedMode = FMC_EXTENDED_MODE_DISABLE;
     hsram2.Init.AsynchronousWait = FMC_ASYNCHRONOUS_WAIT_DISABLE;
-    hsram2.Init.WriteBurst = FMC_WRITE_BURST_DISABLE;
+    hsram2.Init.WriteBurst = FMC_WRITE_BURST_ENABLE;
     hsram2.Init.ContinuousClock = FMC_CONTINUOUS_CLOCK_SYNC_ONLY;
     hsram2.Init.WriteFifo = FMC_WRITE_FIFO_DISABLE;
     hsram2.Init.PageSize = FMC_PAGE_SIZE_NONE;
     /* Timing */
-    Timing.AddressSetupTime = 2;
-    Timing.AddressHoldTime = 4;
-    Timing.DataSetupTime = 6;
-    Timing.BusTurnAroundDuration = 1;
-    Timing.CLKDivision = 16;
-    Timing.DataLatency = 17;
-    Timing.AccessMode = FMC_ACCESS_MODE_A;
-    /* ExtTiming */
+    Timing.AddressSetupTime = 3;
+    Timing.AddressHoldTime = 0;
+    Timing.DataSetupTime = 2;
+    Timing.BusTurnAroundDuration = 0;
+    Timing.CLKDivision = 0;
+    Timing.DataLatency = 0;
+    Timing.AccessMode = FMC_ACCESS_MODE_D;
+    /* ExtTiming - Write only */
+    ExtTiming.AddressSetupTime = 3;
+    ExtTiming.AddressHoldTime = 0;
+    ExtTiming.DataSetupTime = 1;
+    ExtTiming.BusTurnAroundDuration = 0;
+    ExtTiming.CLKDivision = 0;
+    ExtTiming.DataLatency = 0;
+    ExtTiming.AccessMode = FMC_ACCESS_MODE_D;
 
     if (HAL_SRAM_Init(&hsram2, &Timing, NULL) != HAL_OK)
     {
@@ -1010,19 +986,26 @@ static void HAL_FMC_MspInit(void)
         return;
     }
     FMC_Initialized = 1;
-    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
-    /** Initializes the peripherals clock
-     */
+  /** Initializes the peripherals clock
+  */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
-    PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL;
+    PeriphClkInitStruct.PLL2.PLL2M = 8;
+    PeriphClkInitStruct.PLL2.PLL2N = 80;
+    PeriphClkInitStruct.PLL2.PLL2P = 2;
+    PeriphClkInitStruct.PLL2.PLL2Q = 2;
+    PeriphClkInitStruct.PLL2.PLL2R = 2;
+    PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_3;
+    PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
+    PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL2;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
-        Error_Handler();
+      Error_Handler();
     }
 
-    /* Peripheral clock enable */
-    __HAL_RCC_FMC_CLK_ENABLE();
+  /* Peripheral clock enable */
+  __HAL_RCC_FMC_CLK_ENABLE();
 
     /** FMC GPIO Configuration
     PE3   ------> FMC_A19
@@ -1234,9 +1217,7 @@ void Inkplate::mpuFMCPatch()
 {
     MPU_Region_InitTypeDef MPU_InitStruct;
 
-    /* Disable the MPU */
     HAL_MPU_Disable();
-
     // Disable only cache on LCD interface, NOT SRAM!
     MPU_InitStruct.Enable = MPU_REGION_ENABLE;
     MPU_InitStruct.BaseAddress = 0x68000000;
@@ -1249,16 +1230,6 @@ void Inkplate::mpuFMCPatch()
     MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
     MPU_InitStruct.SubRegionDisable = 0x00;
     MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
-
     HAL_MPU_ConfigRegion(&MPU_InitStruct);
-    /* Enable the MPU */
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
-}
-
-static void delayUS(float _t)
-{
-    int32_t start = dwt_getCycles();
-    int32_t cycles = int32_t(_t * (SystemCoreClock / 1000000));
-    while ((int32_t)dwt_getCycles() - start < cycles)
-        ;
 }

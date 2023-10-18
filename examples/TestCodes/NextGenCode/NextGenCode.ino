@@ -15,9 +15,11 @@ void setup()
     Serial.println("Code has started!");
     MX_MDMA_Init();
     display.begin();
-    Serial.printf("array Addr: 0X%08X\r\n", (uint32_t)(array));
+    //Serial.printf("array Addr: 0X%08X\r\n", (uint32_t)(array));
     //display.drawBitmap3Bit(0, 0, img3, img3_w, img3_h);
     //display.display();
+
+    //while(1);
 
     for (int i = 0; i < 1024; i++)
     {
@@ -70,7 +72,7 @@ static void MX_MDMA_Init(void)
   hmdma_mdma_channel40_sw_0.Init.Endianness = MDMA_LITTLE_ENDIANNESS_PRESERVE;
   hmdma_mdma_channel40_sw_0.Init.SourceInc = MDMA_SRC_INC_BYTE;
   hmdma_mdma_channel40_sw_0.Init.DestinationInc = MDMA_DEST_INC_BYTE;
-  hmdma_mdma_channel40_sw_0.Init.SourceDataSize = MDMA_SRC_DATASIZE_HALFWORD;
+  hmdma_mdma_channel40_sw_0.Init.SourceDataSize = MDMA_DEST_DATASIZE_BYTE;
   hmdma_mdma_channel40_sw_0.Init.DestDataSize = MDMA_DEST_DATASIZE_BYTE;
   hmdma_mdma_channel40_sw_0.Init.DataAlignment = MDMA_DATAALIGN_PACKENABLE;
   hmdma_mdma_channel40_sw_0.Init.BufferTransferLength = 1;

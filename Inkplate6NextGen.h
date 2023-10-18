@@ -18,6 +18,8 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #include "WProgram.h"
 #endif
 
+#define DEBUG_MSG(msg) {Serial.print("[DEBUG] "); Serial.println(msg); Serial.flush();}
+
 #include "Adafruit_GFX.h"
 #include "SPI.h"
 #include "SdFat.h"
@@ -25,17 +27,9 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_sram.h"
 
-// ED060SC7
-// #define E_INK_WIDTH 		800ULL
-// #define E_INK_HEIGHT 		600ULL
-
 // ED060KC1
 #define E_INK_WIDTH  1448ULL
 #define E_INK_HEIGHT 1072ULL
-
-// ED060XH7
-// #define E_INK_WIDTH 		1024ULL
-// #define E_INK_HEIGHT 		758ULL
 
 #define BLACK         1
 #define WHITE         0
@@ -58,7 +52,6 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #define EPD_SPH          PD6
 #define EPD_CKV          PB1
 #define EPD_GMODE        PG7
-
 
 /* Clock pin is not used, we do not bit-bang data anymore. Now we are using FMC
 #define CL        		GPIO_PIN_11
@@ -167,47 +160,78 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 
 extern SPIClass spi2;
 extern SdFat sd;
-
-// void MX_FMC_Init(void);
-// uint32_t FMC_Initialized = 0;
-// void HAL_FMC_MspInit(void);
 extern "C" void HAL_SRAM_MspInit(SRAM_HandleTypeDef *hsram);
-// uint32_t FMC_DeInitialized = 0;
-// void HAL_FMC_MspDeInit(void);
 extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef *hsram);
-static void SystemClock_Config2(void);
-static void delayUS(float _t);
+
+static inline void delayUS(float _t)
+{
+    int32_t start = dwt_getCycles();
+    int32_t cycles = int32_t(_t * (SystemCoreClock / 1000000));
+    while ((int32_t)dwt_getCycles() - start < cycles);
+}
+
+static inline void vscan_start()
+{
+    CKV_SET;
+    delayMicroseconds(7);
+    SPV_CLEAR;
+    delayMicroseconds(10);
+    CKV_CLEAR;
+    delayMicroseconds(1);
+    CKV_SET;
+    delayMicroseconds(8);
+    SPV_SET;
+    delayMicroseconds(10);
+    CKV_CLEAR;
+    delayMicroseconds(1);
+    CKV_SET;
+    delayMicroseconds(18);
+    CKV_CLEAR;
+    delayMicroseconds(1);
+    CKV_SET;
+    delayMicroseconds(18);
+    CKV_CLEAR;
+}
+
+static inline void hscan_start(uint8_t _d1, uint8_t _d2)
+{
+    SPH_CLEAR;
+    CKV_SET;
+    *(__IO uint8_t *)(FMC_ADDRESS) = _d1;
+    delayUS(0.4);
+    SPH_SET;
+    *(__IO uint8_t *)(FMC_ADDRESS) = _d2;
+}
+
+static inline void vscan_end()
+{
+    CKV_CLEAR;
+    delayUS(0.5);
+    LE_SET;
+    *(__IO uint8_t *)(FMC_ADDRESS) = 0;
+    LE_CLEAR;
+    delayUS(0.5);
+}
 
 class Inkplate : public Adafruit_GFX
 {
   public:
-    // uint8_t* D_memory_new;
-    // uint8_t* _partial;
-    // uint8_t* D_memory4Bit;
-    // uint8_t * _pBuffer;
-    // uint8_t *imageBuffer;
-    // uint8_t *partialBuffer;
+
     __IO uint8_t *imageBuffer = (__IO uint8_t *)0x60000000;
     __IO uint8_t *partialBuffer = (__IO uint8_t *)0x600BD7C0;
-    // uint8_t* imageBuffer;
-    // uint8_t* partialBuffer;
-    // const uint8_t LUT2[16] = {B01010101, B01010110, B01011001, B01011010, B01100101, B01100110, B01101001, B01101010,
-    // B10010101, B10010110, B10011001, B10011010, B10100101, B10100110, B10101001, B10101010}; const uint8_t LUTW[16] =
-    // {B10101010, B10101011, B10101110, B10101111, B10111010, B10111011, B10111110, B10111111, B11101010, B11101011,
-    // B11101110, B11101111, B11111010, B11111011, B11111110, B11111111}; const uint8_t LUTB[16] = {B01010101,
-    // B01010111, B01011101, B01011111, B01110101, B01110111, B01111101, B01111111, B11010101, B11010111, B11011101,
-    // B11011111, B11110101, B11110111, B11111101, B11111111};
-    const uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101,
+
+
+    uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101,
                               B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
-    const uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010,
+    uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010,
                               B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
-    const uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101,
+    uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101,
                               B01111111, B01111101, B01110111, B01110101, B01011111, B01011101, B01010111, B01010101};
 
-    const uint8_t pixelMaskLUT[8] = {B10000000, B01000000, B00100000, B00010000,
+    uint8_t pixelMaskLUT[8] = {B10000000, B01000000, B00100000, B00010000,
                                      B00001000, B00000100, B00000010, B00000001};
-    const uint8_t pixelMaskGLUT[2] = {B11110000, B00001111};
-    const uint8_t discharge[16] = {B11111111, B11111100, B11110011, B11110000, B11001111, B11001100,
+    uint8_t pixelMaskGLUT[2] = {B11110000, B00001111};
+    uint8_t discharge[16] = {B11111111, B11111100, B11110011, B11110000, B11001111, B11001100,
                                    B11000011, B11000000, B00111111, B00111100, B00110011, B00110000,
                                    B00001111, B00001100, B00000011, B00000000};
     // BLACK->WHITE
@@ -296,9 +320,9 @@ class Inkplate : public Adafruit_GFX
     uint8_t readTouchpad(uint8_t);
     int8_t readTemperature();
     double readBattery();
-    void vscan_start();
-    void hscan_start(uint8_t _d1 = 0, uint8_t _d2 = 0);
-    void vscan_end();
+    //void vscan_start();
+    //void hscan_start(uint8_t _d1 = 0, uint8_t _d2 = 0);
+    //void vscan_end();
     void rowSkip(uint16_t _n);
     void cleanFast(uint8_t c, uint8_t rep);
     void pinsZstate();

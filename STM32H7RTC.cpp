@@ -7,15 +7,6 @@ STM32RTC::STM32RTC()
 //-------------------Library Functions----------------------------------
 RTC_HandleTypeDef STM32RTC::begin(uint8_t _format, bool _resetRtc)
 {
-    // RCC_PeriphCLKInitTypeDef PeriphClkInit;
-    // enableClock(LSE_CLOCK);
-    // PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    // PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-    // if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
-    //     Error_Handler();
-    // }
-    extern HardwareSerial mainSerial;
-
     // Enable backup domain (needed for RTC).
     HAL_PWR_EnableBkUpAccess();
 
@@ -32,7 +23,6 @@ RTC_HandleTypeDef STM32RTC::begin(uint8_t _format, bool _resetRtc)
     // // Update the settings.
     if (HAL_RCC_OscConfig(&_oscConfig) != HAL_OK)
     {
-        mainSerial.println("Clock update config failed!");
         Error_Handler();
     }
 
@@ -42,21 +32,9 @@ RTC_HandleTypeDef STM32RTC::begin(uint8_t _format, bool _resetRtc)
     PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
     {
-        mainSerial.println("How about no...");
         Error_Handler();
     }
 
-    // mainSerial.println("Yoooooo!");
-    // RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
-    // PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    // PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-    // mainSerial.println("Here2?");
-    // if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-    // {
-    //   Error_Handler();
-    // }
-
-    // mainSerial.println("Here3?");
     __HAL_RCC_RTC_ENABLE();
     RTC_TimeTypeDef sTime = {0};
     RTC_DateTypeDef sDate = {0};
