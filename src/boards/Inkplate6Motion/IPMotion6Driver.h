@@ -30,7 +30,7 @@
 #define EPD_FMC_ADDR    0x68000000
 
 // --- Functions declared static inline here for less calling overhead. ---
-// TODO: Try to store this function into the RAM.
+// TODO: Try to store this function into the the internal RAM for faster execution.
 
 // Custom delay function for more precise delays.
 static inline void delayUS(float _t)

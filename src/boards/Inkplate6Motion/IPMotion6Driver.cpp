@@ -10,14 +10,23 @@ EPDDriver::EPDDriver()
 
 int EPDDriver::initDriver()
 {
+    INKPLATE_DEBUG_MGS("EPD Driver init started");
+
     // Configure GPIO pins.
     gpioInit();
 
     // Enable TPS65186 and keep it on.
     WAKEUP_SET;
 
+    // Wait a little bit for PMIC.
+    delay(10);
+
     // Init PMIC. Return error if failed.
-    if (!pmic.begin()) return 0;
+    if (!pmic.begin())
+    {
+        INKPLATE_DEBUG_MGS("EPD PMIC init failed!");
+        return 0;
+    }
 
     // Init STM32 FMC (Flexible memory controller) for faster pushing data to panel using Hardware (similar to ESP32 I2S
     // Parallel, but much faster and better).
@@ -27,7 +36,10 @@ int EPDDriver::initDriver()
     pmic.setPowerOffSeq(0b00000000, 0b00000000);
 
     // Calculate the GLUT for fast pixel to waveform calculation.
-    calculateGLUT(GLUT1, GLUT2, 17);
+    // TODO: load the waveform and do not use hardcoded number of phases!
+    calculateGLUT(GLUT1, GLUT2, 15);
+
+    INKPLATE_DEBUG_MGS("EPD Driver init done")
 
     // Everything went ok? Return 1 for success.
     return 1;
@@ -106,8 +118,8 @@ void EPDDriver::partialUpdate(uint8_t _leaveOn)
         return;
     }
 
-    // Enable EPD PSU.
-    epdPSU(1);
+    // Power up EPD PMIC. Abort update if failed.
+    if (!epdPSU(1)) return;
     
     __IO uint8_t *_pos;
     __IO uint8_t *_partialPos;
@@ -156,7 +168,7 @@ void EPDDriver::partialUpdate(uint8_t _leaveOn)
 
 void EPDDriver::partialUpdate4Bit(uint8_t _leaveOn)
 {
-    // TO-DO!!! Do not alloce whole user RAM just to find the difference mask. Do it line by line!
+    // TODO!!! Do not alloce whole user RAM just to find the difference mask. Do it line by line!
     // And also check why image is darker on partial update compared to the full grayscale update!
     // Anyhow, this must be optimised!
     const uint8_t _cleanWaveform[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2,
@@ -188,8 +200,8 @@ void EPDDriver::partialUpdate4Bit(uint8_t _leaveOn)
         }
     }
     
-    // Enable EPD PSU.
-    epdPSU(1);
+    // Power up EPD PMIC. Abort update if failed.
+    if (!epdPSU(1)) return;
 
     for (int k = 0; k < 60; k++)
     {
@@ -265,11 +277,15 @@ void EPDDriver::display(uint8_t _leaveOn)
     // Depending on the mode, use on or the other function.
     if (getDisplayMode() == INKPLATE_1BW)
     {
+        INKPLATE_DEBUG_MGS("1bit global update");
         display1b(_leaveOn);
+        INKPLATE_DEBUG_MGS("1bit global update done");
     }
     else
     {
+        INKPLATE_DEBUG_MGS("3bit global update");
         display3b(_leaveOn);
+        INKPLATE_DEBUG_MGS("3bit global update done");
     }
 }
 
@@ -279,8 +295,8 @@ void EPDDriver::display1b(uint8_t _leaveOn)
     __IO uint8_t *_pos;
     uint8_t data;
 
-    // Enable EPD PSU.
-    epdPSU(1);
+    // Power up EPD PMIC. Abort update if failed.
+    if (!epdPSU(1)) return;
     
     cleanFast(0, 5);
 
@@ -368,6 +384,9 @@ void EPDDriver::display3b(uint8_t _leaveOn)
         imageBuffer[i] = partialBuffer[i];
     }
 
+    // Power up EPD PMIC. Abort update if failed.
+    if (!epdPSU(1)) return;
+
     cleanFast(0, 10);
     cleanFast(1, 30);
     cleanFast(0, 30);
@@ -441,6 +460,7 @@ int EPDDriver::epdPSU(uint8_t _state)
         {
             VCOM_CLEAR;
             PWRUP_CLEAR;
+            INKPLATE_DEBUG_MGS("EPC PMIC power up failed");
             return 0;
         }
 
@@ -469,7 +489,11 @@ int EPDDriver::epdPSU(uint8_t _state)
         } while ((pmic.getPwrgoodFlag() != 0) && (millis() - timer) < 250);
 
         // There is still voltages at the EPD PMIC? Something does not seems right...
-        if (pmic.getPwrgoodFlag() != 0) return 0;
+        if (pmic.getPwrgoodFlag() != 0)
+        {
+            INKPLATE_DEBUG_MGS("EPC PMIC power down failed");
+            return 0;
+        }
 
         epdGpioState(EPD_DRIVER_PINS_H_ZI);
 

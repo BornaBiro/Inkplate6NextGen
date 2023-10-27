@@ -8,6 +8,9 @@
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_sram.h"
 
+// Needed for Debug messages
+#include "../system/defines.h"
+
 // Define SRAM start address
 #define EXTERNAL_SRAM_ADDR  0x60000000
 

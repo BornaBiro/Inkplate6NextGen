@@ -2,13 +2,13 @@
 #define __DEFINES_H__
 
 // Uncomment for debug messages
-//#define __INKPLATE__DEBUG__
+#define __INKPLATE__DEBUG__
 
 // Debug meesage print.
 #ifdef __INKPLATE__DEBUG__
-#define DEBUG_MGS(X) printf("[IP DEBUG] %s\r\n", X);
+#define INKPLATE_DEBUG_MGS(X) Serial.printf("[IP DEBUG] %s\r\n", X); Serial.flush();
 #else
-#define DEBUG_MGS(X)
+#define INKPLATE_DEBUG_MGS(X)
 #endif
 
 #define BLACK         1

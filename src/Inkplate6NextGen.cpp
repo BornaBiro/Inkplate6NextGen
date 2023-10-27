@@ -31,13 +31,15 @@ Inkplate::Inkplate() : Adafruit_GFX(SCREEN_WIDTH, SCREEN_HEIGHT)
 
 void Inkplate::begin(uint8_t _mode)
 {
+    INKPLATE_DEBUG_MGS("begin() started");
+
     if (_beginDone == 1)
         return;
     // Init I2C (Arduino Wire Library).
     Wire.begin();
 
-    // Start the library into 1 bit mode.
-    selectDisplayMode(INKPLATE_1BW);
+    // Start the library in selected mode. By default is 1bit mode.
+    selectDisplayMode(_mode);
 
     // Init low level driver for EPD.
     initDriver();
@@ -50,6 +52,8 @@ void Inkplate::begin(uint8_t _mode)
 
     // Block multiple inits.
     _beginDone = 1;
+
+    INKPLATE_DEBUG_MGS("begin() done");
 }
 
 // Draw function, used by Adafruit GFX.

@@ -39,7 +39,7 @@
 #define SPV                 GPIO_PIN_12
 #define SPV_SET             GPIOG->BSRR = SPV;
 #define SPV_CLEAR           GPIOG->BSRR = (SPV << 16);
-#define EPD_SPV_GPIO        PB7
+#define EPD_SPV_GPIO        PG12
 
 // Define pins for TPS65185/TPS65186 EPD PMIC.
 // EPD PMIC WakeUp pin <-> PG6 (for now, in future it will be connected to the I/O expander!).

@@ -310,6 +310,8 @@ extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef *hsram)
 
 void stm32FmcInit()
 {
+    INKPLATE_DEBUG_MGS("STM32 FMC Driver Init started");
+
     // Enable clock to GPIOs
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOH_CLK_ENABLE();
@@ -334,6 +336,8 @@ void stm32FmcInit()
      * performace! Real workaround is to disable cache on LCD memory allocation with MPU (Memory Protection Unit).
      */
     stm32MpuInit();
+
+    INKPLATE_DEBUG_MGS("STM32 FMC Driver Init done");
 }
 
 /**
@@ -342,6 +346,8 @@ void stm32FmcInit()
  */
 void stm32MpuInit()
 {
+    INKPLATE_DEBUG_MGS("STM32 MPU Init started");
+
     MPU_Region_InitTypeDef MPU_InitStruct;
 
     HAL_MPU_Disable();
@@ -359,4 +365,6 @@ void stm32MpuInit()
     MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
     HAL_MPU_ConfigRegion(&MPU_InitStruct);
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    INKPLATE_DEBUG_MGS("STM32 MPU Init done");
 }
