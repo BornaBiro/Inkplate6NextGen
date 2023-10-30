@@ -10,7 +10,7 @@ This library uses Adafruit GFX library (https://github.com/adafruit/Adafruit-GFX
 NOTE: This library is still heavily in progress, so there is still some bugs. Use it on your own risk!
  ****************************************************/
 
-#include "Inkplate6NextGen.h"
+#include "InkplateMotion.h"
 
     // __attribute__((section(".DTCMRAM_section"))) uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101,
     //                           B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
@@ -98,7 +98,7 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color)
     }
 }
 
-void Inkplate::drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char *_p, int16_t _w, int16_t _h)
+void Inkplate::drawBitmap4Bit(int16_t _x, int16_t _y, const unsigned char *_p, int16_t _w, int16_t _h)
 {
     if (getDisplayMode() != INKPLATE_GL16)
         return;

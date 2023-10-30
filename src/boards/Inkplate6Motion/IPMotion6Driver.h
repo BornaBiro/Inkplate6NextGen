@@ -126,12 +126,15 @@ class EPDDriver
         void epdGpioState(uint8_t _state);
 
         // Fuctions calculates the LUT table for the current wavefrom
-        void calculateGLUT(uint8_t *_lut1, uint8_t *_lut2, int _phases);
+        void calculateGLUT(uint8_t *_waveform, uint8_t **_lut1, uint8_t **_lut2, int _phases);
 
         uint8_t _displayMode = INKPLATE_1BW;
         
         // Block partial update at startup, use full update.
         uint8_t _blockPartial = 1;
+
+        // Number of waveform phases.
+        int _wfPhases = 0;
 };
 
 #endif

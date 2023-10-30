@@ -7,8 +7,8 @@ This library uses Adafruit GFX library (https://github.com/adafruit/Adafruit-GFX
 NOTE: This library is still heavily in progress, so there is still some bugs. Use it on your own risk!
  ****************************************************/
 
-#ifndef __INKPLATE6NEXTGEN_H__
-#define __INKPLATE6NEXTGEN_H__
+#ifndef __INKPLATEMOTION_H__
+#define __INKPLATEMOTION_H__
 
 // Include main Arduino Header file.
 #include "Arduino.h"
@@ -52,7 +52,7 @@ class Inkplate : public Adafruit_GFX, public EPDDriver
     void setRotation(uint8_t);
     int drawBitmapFromSD(SdFile *p, int x, int y);
     int drawBitmapFromSD(char *fileName, int x, int y);
-    void drawBitmap3Bit(int16_t _x, int16_t _y, const unsigned char *_p, int16_t _w, int16_t _h);
+    void drawBitmap4Bit(int16_t _x, int16_t _y, const unsigned char *_p, int16_t _w, int16_t _h);
     int sdCardInit();
     SdFat getSdFat();
     SPIClass getSPI();

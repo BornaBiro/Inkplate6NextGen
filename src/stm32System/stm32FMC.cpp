@@ -48,8 +48,8 @@ static void MX_FMC_Init(void)
     Timing.AddressHoldTime = 0;
     Timing.DataSetupTime = 3; // ED060KC1
     Timing.BusTurnAroundDuration = 0;
-    Timing.CLKDivision = 16;
-    Timing.DataLatency = 17;
+    Timing.CLKDivision = 0;
+    Timing.DataLatency = 0;
     Timing.AccessMode = FMC_ACCESS_MODE_A;
     /* ExtTiming */
 

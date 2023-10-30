@@ -37,7 +37,7 @@ int EPDDriver::initDriver()
 
     // Calculate the GLUT for fast pixel to waveform calculation.
     // TODO: load the waveform and do not use hardcoded number of phases!
-    calculateGLUT(GLUT1, GLUT2, 15);
+    calculateGLUT((uint8_t*)&(waveform3Bit2[0][0]), &GLUT1, &GLUT2, 15);
 
     INKPLATE_DEBUG_MGS("EPD Driver init done")
 
@@ -109,7 +109,9 @@ void EPDDriver::clearDisplay()
 
 void EPDDriver::partialUpdate(uint8_t _leaveOn)
 {
-    if (getDisplayMode() == INKPLATE_1BW)
+    INKPLATE_DEBUG_MGS("Partial update 1bit start");
+
+    if (getDisplayMode() != INKPLATE_1BW)
         return;
 
     if (_blockPartial == 1)
@@ -121,6 +123,8 @@ void EPDDriver::partialUpdate(uint8_t _leaveOn)
     // Power up EPD PMIC. Abort update if failed.
     if (!epdPSU(1)) return;
     
+    INKPLATE_DEBUG_MGS("Partial update 1bit pixel difference & send");
+
     __IO uint8_t *_pos;
     __IO uint8_t *_partialPos;
     uint8_t diffw;
@@ -159,11 +163,15 @@ void EPDDriver::partialUpdate(uint8_t _leaveOn)
     if (!_leaveOn)
         epdPSU(0);
 
+    INKPLATE_DEBUG_MGS("Partial update buffer content update");
+
     // After update, copy differences to screen buffer
     for (int i = 0; i < (SCREEN_HEIGHT * SCREEN_WIDTH / 8); i++)
     {
         *(imageBuffer + i) = *(partialBuffer + i);
     }
+
+    INKPLATE_DEBUG_MGS("Partial update done");
 }
 
 void EPDDriver::partialUpdate4Bit(uint8_t _leaveOn)
@@ -238,7 +246,7 @@ void EPDDriver::partialUpdate4Bit(uint8_t _leaveOn)
         delayMicroseconds(230); // Wait 230uS before new frame
     }
 
-    for (int k = 0; k < 15; k++)
+    for (int k = 0; k < _wfPhases; k++)
     {
         __IO uint8_t *dp = partialBuffer;
         _pPanelMask = _panelMask;
@@ -387,16 +395,20 @@ void EPDDriver::display3b(uint8_t _leaveOn)
     // Power up EPD PMIC. Abort update if failed.
     if (!epdPSU(1)) return;
 
-    cleanFast(0, 10);
-    cleanFast(1, 30);
-    cleanFast(0, 30);
-    cleanFast(1, 30);
-    cleanFast(0, 30);
-    cleanFast(2, 1);
+    cleanFast(0, 5);
+    cleanFast(1, 15);
+    cleanFast(2, 2);
+    cleanFast(0, 15);
+    cleanFast(2, 2);
+    cleanFast(1, 15);
+    cleanFast(2, 2);
+    cleanFast(0, 15);
+    cleanFast(2, 2);
+
 
     uint8_t _oneLine[800];
 
-    for (int k = 0; k < 15; k++)
+    for (int k = 0; k < _wfPhases; k++)
     {
         __IO uint8_t *dp = partialBuffer;
         vScanStart();
@@ -413,7 +425,7 @@ void EPDDriver::display3b(uint8_t _leaveOn)
         }
         delayMicroseconds(230);
     }
-    cleanFast(2, 2);
+    cleanFast(2, 1);
     cleanFast(3, 1);
 
     // Disable EPD PSU if needed.
@@ -498,7 +510,7 @@ int EPDDriver::epdPSU(uint8_t _state)
         epdGpioState(EPD_DRIVER_PINS_H_ZI);
 
         // Set new PMIC state.
-        _epdPSUState = 1;      
+        _epdPSUState = 0;      
     }
 
     // Everything went ok? Return 1 as success.
@@ -582,25 +594,34 @@ void EPDDriver::epdGpioState(uint8_t _state)
     }
 }
 
-void EPDDriver::calculateGLUT(uint8_t *_lut1, uint8_t *_lut2, int _phases)
+void EPDDriver::calculateGLUT(uint8_t *_waveform, uint8_t **_lut1, uint8_t **_lut2, int _phases)
 {
     // Clear previous memory allocation
-    if (_lut1 != NULL) free(_lut1);
-    if (_lut2 != NULL) free(_lut2);
+    if (*_lut1 != NULL) free(*_lut1);
+    if (*_lut2 != NULL) free(*_lut2);
 
     // Allocate new memory allocaiton
-    // Make fast Grayscale LUT to convert 4 pixels into proper waveform data for EPD.
-    _lut1 = (uint8_t *)malloc(256 * _phases * sizeof(uint8_t));
-    _lut1 = (uint8_t *)malloc(256 * _phases * sizeof(uint8_t));
+    // Make fast grayscale LUT to convert 4 pixels into proper waveform data for EPD.
+    *_lut1 = (uint8_t *)malloc(256 * _phases * sizeof(uint8_t));
+    *_lut2 = (uint8_t *)malloc(256 * _phases * sizeof(uint8_t));
 
-    for (int j = 0; j < _phases; ++j)
+    // Check for memory allocation.
+    if ((_lut1 == NULL) || (_lut2 == NULL)) return;
+
+    // Calculate the LUT itself.
+    for (int j = 0; j < _phases; j++)
     {
-        for (uint32_t i = 0; i < 256; ++i)
+        for (uint32_t i = 0; i < 256; i++)
         {
-            _lut1[j * 256 + i] = (waveform3Bit2[i & 0x0f][j] << 2) | (waveform3Bit2[(i >> 4) & 0x0f][j]);
-            _lut1[j * 256 + i] = ((waveform3Bit2[i & 0x0f][j] << 2) | (waveform3Bit2[(i >> 4) & 0x0f][j])) << 4;
+            // _waveform[(i & 0x0F) * _phases + j] is same as _waveform[i & 0x0f][j] and 
+            // _waveform[((i >> 4) & 0x0F) * _phases + j] is same as _waveform[(i >> 4) & 0x0f][j]
+            (*_lut1)[j * 256 + i] = (_waveform[(i & 0x0F) * _phases + j] << 2) | (_waveform[((i >> 4) & 0x0F) * _phases + j]);
+            (*_lut2)[j * 256 + i] = ((_waveform[(i & 0x0F) * _phases + j] << 2) | (_waveform[((i >> 4) & 0x0F) * _phases + j])) << 4;
         }
     }
+
+    // Save number of current waveform phases.
+    _wfPhases = _phases;
 }
 
 void EPDDriver::selectDisplayMode(uint8_t _mode)
