@@ -112,17 +112,17 @@ static void HAL_FMC_MspInit(void)
         return;
     }
     FMC_Initialized = 1;
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
-  /** Initializes the peripherals clock
-  */
+    /** Initializes the peripherals clock
+    */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
-    PeriphClkInitStruct.PLL2.PLL2M = 8;
-    PeriphClkInitStruct.PLL2.PLL2N = 80;
+    PeriphClkInitStruct.PLL2.PLL2M = 4;
+    PeriphClkInitStruct.PLL2.PLL2N = 150;
     PeriphClkInitStruct.PLL2.PLL2P = 2;
     PeriphClkInitStruct.PLL2.PLL2Q = 2;
     PeriphClkInitStruct.PLL2.PLL2R = 2;
-    PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_3;
+    PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
     PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
     PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL2;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
@@ -130,8 +130,8 @@ static void HAL_FMC_MspInit(void)
       Error_Handler();
     }
 
-  /* Peripheral clock enable */
-  __HAL_RCC_FMC_CLK_ENABLE();
+    /* Peripheral clock enable */
+    __HAL_RCC_FMC_CLK_ENABLE();
 
     /** FMC GPIO Configuration
     PE3   ------> FMC_A19
