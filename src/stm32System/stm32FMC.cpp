@@ -4,8 +4,14 @@
 // FMC HAL Typedefs and init status variables.
 SRAM_HandleTypeDef hsram1;
 SRAM_HandleTypeDef hsram2;
+MDMA_HandleTypeDef hmdma_mdma_channel40_sw_0;
+MDMA_HandleTypeDef hmdma_mdma_channel41_sw_0;
+MPU_Region_InitTypeDef MPU_InitStructEPD;
 static uint32_t FMC_Initialized = 0;
 static uint32_t FMC_DeInitialized = 0;
+
+volatile uint8_t _stm32MdmaEPDCompleteFlag = 0;
+volatile uint8_t _stm32MdmaSRAMCompleteFlag = 0;
 
 // Really low level STM32 related stuff. Do not change anything unless you really know what you are doing!
 
@@ -46,7 +52,7 @@ static void MX_FMC_Init(void)
     /* Timing */
     Timing.AddressSetupTime = 0;
     Timing.AddressHoldTime = 0;
-    Timing.DataSetupTime = 3; // ED060KC1
+    Timing.DataSetupTime = 2; // ED060KC1
     Timing.BusTurnAroundDuration = 0;
     Timing.CLKDivision = 0;
     Timing.DataLatency = 0;
@@ -337,8 +343,76 @@ void stm32FmcInit()
      */
     stm32MpuInit();
 
+    // Init DMA (MDMA - Master DMA) for external RAM.
+    stm32MDMAInit();
+
+    // Link FMC and Master DMA for RAM.
+    hsram2.hmdma = &hmdma_mdma_channel40_sw_0;
+
+    // Link FMC and Master DMA for EPD.
+    hsram1.hmdma = &hmdma_mdma_channel41_sw_0;
+
+    // Create DMA Transfer callbacks.
+    HAL_MDMA_RegisterCallback(&hmdma_mdma_channel40_sw_0, HAL_MDMA_XFER_CPLT_CB_ID, stm32FMCSRAMTransferCompleteCallback);
+    HAL_MDMA_RegisterCallback(&hmdma_mdma_channel41_sw_0, HAL_MDMA_XFER_CPLT_CB_ID, stm32FMCEPDTransferCompleteCallback);
+
     INKPLATE_DEBUG_MGS("STM32 FMC Driver Init done");
 }
+
+void stm32MDMAInit()
+{
+    /* MDMA controller clock enable */
+    __HAL_RCC_MDMA_CLK_ENABLE();
+    /* Local variables */
+
+    /* Configure MDMA channel MDMA_Channel0 */
+    /* Configure MDMA request hmdma_mdma_channel40_sw_0 on MDMA_Channel0 */
+    hmdma_mdma_channel40_sw_0.Instance = MDMA_Channel0;
+    hmdma_mdma_channel40_sw_0.Init.Request = MDMA_REQUEST_SW;
+    hmdma_mdma_channel40_sw_0.Init.TransferTriggerMode = MDMA_BLOCK_TRANSFER;
+    hmdma_mdma_channel40_sw_0.Init.Priority = MDMA_PRIORITY_VERY_HIGH;
+    hmdma_mdma_channel40_sw_0.Init.Endianness = MDMA_LITTLE_ENDIANNESS_PRESERVE;
+    hmdma_mdma_channel40_sw_0.Init.SourceInc = MDMA_SRC_INC_WORD;
+    hmdma_mdma_channel40_sw_0.Init.DestinationInc = MDMA_DEST_INC_WORD;
+    hmdma_mdma_channel40_sw_0.Init.SourceDataSize = MDMA_SRC_DATASIZE_WORD;
+    hmdma_mdma_channel40_sw_0.Init.DestDataSize = MDMA_DEST_DATASIZE_WORD;
+    hmdma_mdma_channel40_sw_0.Init.DataAlignment = MDMA_DATAALIGN_PACKENABLE;
+    hmdma_mdma_channel40_sw_0.Init.BufferTransferLength = 128;
+    hmdma_mdma_channel40_sw_0.Init.SourceBurst = MDMA_SOURCE_BURST_128BEATS;
+    hmdma_mdma_channel40_sw_0.Init.DestBurst = MDMA_DEST_BURST_128BEATS;
+    hmdma_mdma_channel40_sw_0.Init.SourceBlockAddressOffset = 0;
+    hmdma_mdma_channel40_sw_0.Init.DestBlockAddressOffset = 0;
+    if (HAL_MDMA_Init(&hmdma_mdma_channel40_sw_0) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Configure MDMA channel MDMA_Channel1 */
+    /* Configure MDMA request hmdma_mdma_channel41_sw_0 on MDMA_Channel1 */
+    hmdma_mdma_channel41_sw_0.Instance = MDMA_Channel1;
+    hmdma_mdma_channel41_sw_0.Init.Request = MDMA_REQUEST_SW;
+    hmdma_mdma_channel41_sw_0.Init.TransferTriggerMode = MDMA_BLOCK_TRANSFER;
+    hmdma_mdma_channel41_sw_0.Init.Priority = MDMA_PRIORITY_VERY_HIGH;
+    hmdma_mdma_channel41_sw_0.Init.Endianness = MDMA_LITTLE_ENDIANNESS_PRESERVE;
+    hmdma_mdma_channel41_sw_0.Init.SourceInc = MDMA_SRC_INC_WORD;
+    hmdma_mdma_channel41_sw_0.Init.DestinationInc = MDMA_DEST_INC_DISABLE;
+    hmdma_mdma_channel41_sw_0.Init.SourceDataSize = MDMA_SRC_DATASIZE_WORD;
+    hmdma_mdma_channel41_sw_0.Init.DestDataSize = MDMA_DEST_DATASIZE_BYTE;
+    hmdma_mdma_channel41_sw_0.Init.DataAlignment = MDMA_DATAALIGN_PACKENABLE;
+    hmdma_mdma_channel41_sw_0.Init.BufferTransferLength = 128;
+    hmdma_mdma_channel41_sw_0.Init.SourceBurst = MDMA_SOURCE_BURST_128BEATS;
+    hmdma_mdma_channel41_sw_0.Init.DestBurst = MDMA_DEST_BURST_128BEATS;
+    hmdma_mdma_channel41_sw_0.Init.SourceBlockAddressOffset = 0;
+    hmdma_mdma_channel41_sw_0.Init.DestBlockAddressOffset = 0;
+    if (HAL_MDMA_Init(&hmdma_mdma_channel41_sw_0) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    HAL_NVIC_SetPriority(MDMA_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(MDMA_IRQn);
+}
+
 
 /**
  * @brief       It disables cacheing on LCD FMC memory area, but not affecting caching on SRAM by using MPU.
@@ -348,23 +422,58 @@ void stm32MpuInit()
 {
     INKPLATE_DEBUG_MGS("STM32 MPU Init started");
 
-    MPU_Region_InitTypeDef MPU_InitStruct;
-
     HAL_MPU_Disable();
     // Disable only cache on LCD interface, NOT SRAM!
-    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
-    MPU_InitStruct.BaseAddress = 0x68000000;
-    MPU_InitStruct.Size = MPU_REGION_SIZE_64MB;
-    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
-    MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
-    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
-    MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
-    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
-    MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
-    MPU_InitStruct.SubRegionDisable = 0x00;
-    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
-    HAL_MPU_ConfigRegion(&MPU_InitStruct);
+    MPU_InitStructEPD.Enable = MPU_REGION_ENABLE;
+    MPU_InitStructEPD.BaseAddress = 0x68000000;
+    MPU_InitStructEPD.Size = MPU_REGION_SIZE_64MB;
+    MPU_InitStructEPD.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStructEPD.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+    MPU_InitStructEPD.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+    MPU_InitStructEPD.IsShareable = MPU_ACCESS_SHAREABLE;
+    MPU_InitStructEPD.Number = MPU_REGION_NUMBER1;
+    MPU_InitStructEPD.TypeExtField = MPU_TEX_LEVEL0;
+    MPU_InitStructEPD.SubRegionDisable = 0x00;
+    MPU_InitStructEPD.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    HAL_MPU_ConfigRegion(&MPU_InitStructEPD);
+
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 
     INKPLATE_DEBUG_MGS("STM32 MPU Init done");
+}
+
+void stm32FMCSRAMTransferCompleteCallback(MDMA_HandleTypeDef *_mdma)
+{
+    _stm32MdmaSRAMCompleteFlag = 1;
+}
+
+void stm32FMCEPDTransferCompleteCallback(MDMA_HandleTypeDef *_mdma)
+{
+    _stm32MdmaEPDCompleteFlag = 1;
+}
+
+void stm32FMCClearEPDCompleteFlag()
+{
+    _stm32MdmaEPDCompleteFlag = 0;
+}
+
+void stm32FMCClearSRAMCompleteFlag()
+{
+    _stm32MdmaSRAMCompleteFlag = 0;
+}
+
+uint8_t stm32FMCEPDCompleteFlag()
+{
+    return _stm32MdmaEPDCompleteFlag;
+}
+
+uint8_t stm32FMCSRAMCompleteFlag()
+{
+    return _stm32MdmaSRAMCompleteFlag;
+}
+
+extern "C" void MDMA_IRQHandler()
+{
+    HAL_MDMA_IRQHandler(&hmdma_mdma_channel40_sw_0);
+    HAL_MDMA_IRQHandler(&hmdma_mdma_channel41_sw_0);
 }

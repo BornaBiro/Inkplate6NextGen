@@ -7,6 +7,7 @@
 // Include STM32 SRAM HAL functions.
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_sram.h"
+#include "stm32h7xx_hal_mdma.h"
 
 // Needed for Debug messages
 #include "../system/defines.h"
@@ -24,5 +25,13 @@ extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef *hsram);
 
 void stm32FmcInit();
 void stm32MpuInit();
+void stm32MDMAInit();
+void stm32FMCSRAMTransferCompleteCallback(MDMA_HandleTypeDef *_mdma);
+void stm32FMCEPDTransferCompleteCallback(MDMA_HandleTypeDef *_mdma);
+void stm32FMCClearEPDCompleteFlag();
+void stm32FMCClearSRAMCompleteFlag();
+uint8_t stm32FMCEPDCompleteFlag();
+uint8_t stm32FMCSRAMCompleteFlag();
+extern "C" void MDMA_IRQHandler();
 
 #endif

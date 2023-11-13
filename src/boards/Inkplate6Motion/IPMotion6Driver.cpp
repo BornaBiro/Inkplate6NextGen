@@ -3,6 +3,20 @@
 // Header guard for the Arduino include
 #ifdef BOARD_INKPLATE6_MOTION
 
+
+// Buffer for one Line on the screen from epapper framebuffer from exterenal RAM. It's packed 4 bits per pixel.
+// TODO: Do not use hardcoded size.
+//uint8_t _oneLine[SCREEN_WIDTH / 2];
+__attribute__((section(".dma_buffer"))) uint8_t _oneLine[SCREEN_WIDTH / 2];
+// Buffer for decoded pixels modified by the EPD waveform. EPD uses 4 pixels per byte (2 bits per pixel).
+__attribute__((section(".dma_buffer"))) uint8_t _decodedLine[SCREEN_WIDTH / 4];
+
+extern SRAM_HandleTypeDef hsram1; // EPD
+extern SRAM_HandleTypeDef hsram2; // SDRAM
+extern MDMA_HandleTypeDef hmdma_mdma_channel40_sw_0;
+extern MDMA_HandleTypeDef hmdma_mdma_channel41_sw_0;
+
+
 EPDDriver::EPDDriver()
 {
     // Empty constructor.
@@ -39,7 +53,7 @@ int EPDDriver::initDriver()
     // TODO: load the waveform and do not use hardcoded number of phases!
     calculateGLUT((uint8_t*)&(waveform3Bit2[0][0]), &GLUT1, &GLUT2, 15);
 
-    INKPLATE_DEBUG_MGS("EPD Driver init done")
+    INKPLATE_DEBUG_MGS("EPD Driver init done");
 
     // Everything went ok? Return 1 for success.
     return 1;
@@ -68,19 +82,21 @@ void EPDDriver::cleanFast(uint8_t c, uint8_t rep)
         data = B11111111; // Skip
     }
 
+    // Fill the buffer with the color.
+    for (int i = 0; i < (sizeof(_decodedLine) / sizeof(uint8_t)); i++)
+    {
+        _decodedLine[i] = data;
+    }
+
     for (int k = 0; k < rep; k++)
     {
         vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
             hScanStart(data, data);
-            for (int j = 0; j < (SCREEN_WIDTH / 8) - 1; j++)
-            {
-                //  Do not use HAL. it's way slower. Use direct writing data to memory
-                *(__IO uint8_t *)(EPD_FMC_ADDR) = data;
-                *(__IO uint8_t *)(EPD_FMC_ADDR) = data;
-            }
-
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel41_sw_0, (uint32_t)_decodedLine, (uint32_t)EPD_FMC_ADDR, sizeof(_decodedLine) - 2, 1);
+            while(stm32FMCEPDCompleteFlag() == 0);
+            stm32FMCEPDCompleteFlag();
             vScanEnd();
         }
 
@@ -405,25 +421,60 @@ void EPDDriver::display3b(uint8_t _leaveOn)
     cleanFast(0, 15);
     cleanFast(2, 2);
 
-
-    uint8_t _oneLine[800];
+    //stm32MDMAConfigure(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer, (uint32_t)_oneLine, sizeof(_oneLine));
+    //hsram2.State = HAL_SRAM_STATE_READY;
+    //HAL_SRAM_Read_DMA(&hsram2, (uint32_t*)partialBuffer, (uint32_t*)_oneLine, 1);
+    //HAL_MDMA_PollForTransfer(&hmdma_mdma_channel40_sw_0, HAL_MDMA_FULL_TRANSFER, HAL_MAX_DELAY);
 
     for (int k = 0; k < _wfPhases; k++)
     {
-        __IO uint8_t *dp = partialBuffer;
+        uint8_t *dp = (uint8_t*)partialBuffer;
+        uint8_t *_oneLinePtr;
+
+        // Send to the screen!
         vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
-            hScanStart((GLUT2[k * 256 + (*(dp++))] | GLUT1[k * 256 + (*(dp++))]),
-                        (GLUT2[k * 256 + (*(dp++))] | GLUT1[k * 256 + (*(dp++))]));
-            for (int j = 0; j < ((SCREEN_WIDTH / 8)) - 1; j++)
+            // Copy data from external RAM into intrnal.
+            //hsram2.hmdma = &hmdma_mdma_channel40_sw_0;
+            //if (HAL_SRAM_Read_DMA(&hsram2, (uint32_t*)dp, (uint32_t*)_oneLine, sizeof(_oneLine) / 4) != HAL_OK)
+            //{
+            //    Serial.println("DMA HAS FAILED!");
+            //    return;
+            //}
+            _oneLinePtr = _oneLine;
+            //stm32MDMAModifyAddress(&hmdma_mdma_channel40_sw_0, (uint32_t)dp, (uint32_t)_oneLinePtr);
+            //stm32MDMAStart(&hmdma_mdma_channel40_sw_0);
+            
+            //hsram2.State = HAL_SRAM_STATE_READY;
+            //HAL_SRAM_Read_DMA(&hsram2, (uint32_t*)dp, (uint32_t*)_oneLine, sizeof(_oneLine) / 4);
+            //HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)dp, (uint32_t)_oneLine, sizeof(_oneLine), 1);
+            //while(stm32FMCSRAMCompleteFlag() == 0);
+            //stm32FMCClearSRAMCompleteFlag();
+            for (int n = 0; n < sizeof(_decodedLine); n++)
             {
-                *(__IO uint8_t *)(EPD_FMC_ADDR) = GLUT2[k * 256 + (*(dp++))] | GLUT1[k * 256 + (*(dp++))];
-                *(__IO uint8_t *)(EPD_FMC_ADDR) = GLUT2[k * 256 + (*(dp++))] | GLUT1[k * 256 + (*(dp++))];
+                //_decodedLine[n] = GLUT2[(k << 8) + *(_oneLinePtr++)] | GLUT1[(k << 8) + *(_oneLinePtr++)];
+                _decodedLine[n] = 0b01010101;
             }
+            //while(stm32MDMATransferComplete(&hmdma_mdma_channel40_sw_0) == 0);
+            //__HAL_MDMA_DISABLE(&hmdma_mdma_channel40_sw_0);
+            //stm32MDMAClearFlag(&hmdma_mdma_channel40_sw_0);
+            //HAL_MDMA_PollForTransfer(&hmdma_mdma_channel40_sw_0, HAL_MDMA_FULL_TRANSFER, HAL_MAX_DELAY);
+            
+            hScanStart(_decodedLine[0], _decodedLine[1]);
+            //for (int j = 2; j < ((SCREEN_WIDTH / 4)); j++)
+            //{
+            //    *(__IO uint8_t *)(EPD_FMC_ADDR) = _decodedLine[j];
+            //}
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel41_sw_0, (uint32_t)_decodedLine, (uint32_t)EPD_FMC_ADDR, sizeof(_decodedLine) - 2, 1);
+            while(stm32FMCEPDCompleteFlag() == 0);
+            stm32FMCEPDCompleteFlag();
+            
             vScanEnd();
+            
+            // Advance pointer of the framebuffer
+            dp += (SCREEN_WIDTH / 2);
         }
-        delayMicroseconds(230);
     }
     cleanFast(2, 1);
     cleanFast(3, 1);
@@ -519,8 +570,50 @@ int EPDDriver::epdPSU(uint8_t _state)
 
 void EPDDriver::gpioInit()
 {
-    // For some reason, HAL doesn't initalize GPIOF properly, so it has to be done with Arduino pinMode() function.
+    // For some reason, HAL doesn't initalize GPIOs for FMC properly, so it has to be done with Arduino pinMode() function.
     pinMode(PF0, OUTPUT);
+    pinMode(PE3, OUTPUT);
+    pinMode(PF0, OUTPUT);
+    pinMode(PF1, OUTPUT);
+    pinMode(PF2, OUTPUT);
+    pinMode(PF3, OUTPUT);
+    pinMode(PF4, OUTPUT);
+    pinMode(PF5, OUTPUT);
+    pinMode(PF12, OUTPUT);
+    pinMode(PF13, OUTPUT);
+    pinMode(PF14, OUTPUT);
+    pinMode(PF15, OUTPUT);
+    pinMode(PG0, OUTPUT); 
+    pinMode(PG1, OUTPUT);
+    pinMode(PE7, OUTPUT);
+    pinMode(PE8, OUTPUT);
+    pinMode(PE9, OUTPUT);
+    pinMode(PE10, OUTPUT);
+    pinMode(PE11, OUTPUT);
+    pinMode(PE12, OUTPUT);
+    pinMode(PE13, OUTPUT);
+    pinMode(PE14, OUTPUT);
+    pinMode(PE15, OUTPUT);
+    pinMode(PD8, OUTPUT);
+    pinMode(PD9, OUTPUT);
+    pinMode(PD10, OUTPUT);
+    pinMode(PD11, OUTPUT);
+    pinMode(PD12, OUTPUT);
+    pinMode(PD13, OUTPUT);
+    pinMode(PD14, OUTPUT);
+    pinMode(PD15, OUTPUT);
+    pinMode(PG2, OUTPUT);
+    pinMode(PG3, OUTPUT);
+    pinMode(PG4, OUTPUT);
+    pinMode(PG5, OUTPUT);
+    pinMode(PG6, OUTPUT);
+    pinMode(PC7, OUTPUT);
+    pinMode(PD0, OUTPUT);
+    pinMode(PD1, OUTPUT);
+    pinMode(PD4, OUTPUT);
+    pinMode(PD5, OUTPUT);
+    pinMode(PE0, OUTPUT);
+    pinMode(PE1, OUTPUT);
 
     // Enable the external RAM (inverse logic due P-MOS) and enable it by default.
     pinMode(RAM_EN_GPIO, OUTPUT);

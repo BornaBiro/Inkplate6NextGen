@@ -16,8 +16,11 @@
 // Include waveforms for EPD
 #include "waveforms.h"
 
-// Include libraryfor the STM32 FMC
+// Include library for the STM32 FMC
 #include "../../stm32System/stm32FMC.h"
+
+// Include Master DMA library for STM32.
+#include "../../stm32System/stm32MDMA.h"
 
 // Include library defines
 #include "../../system/defines.h"
@@ -65,7 +68,7 @@ static inline void vScanStart()
 }
 
 // Start writing the first line into epaper display.
-static inline void hScanStart(uint8_t _d1, uint8_t _d2)
+__attribute__((always_inline)) static void hScanStart(uint8_t _d1, uint8_t _d2)
 {
     SPH_CLEAR;
     CKV_SET;
@@ -76,7 +79,7 @@ static inline void hScanStart(uint8_t _d1, uint8_t _d2)
 }
 
 // End writing the line into epaper display.
-static inline void vScanEnd()
+__attribute__((always_inline)) static inline void vScanEnd()
 {
     CKV_CLEAR;
     delayUS(0.5);
@@ -107,7 +110,7 @@ class EPDDriver
         EpdPmic pmic;
     
     protected:
-        // Function initializes all GPIO pins used on Inkplate fro driving EPD.
+        // Function initializes all GPIO pins used on Inkplate for driving EPD.
         void gpioInit();
 
         // External SRAM buffers.
