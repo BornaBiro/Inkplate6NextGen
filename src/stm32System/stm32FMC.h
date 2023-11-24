@@ -7,6 +7,7 @@
 // Include STM32 SRAM HAL functions.
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_sram.h"
+#include "stm32h7xx_hal_sdram.h"
 #include "stm32h7xx_hal_mdma.h"
 
 // Needed for Debug messages
@@ -22,6 +23,7 @@
 // Must be defined as extern for HAL driver to be able to find them.
 extern "C" void HAL_SRAM_MspInit(SRAM_HandleTypeDef *hsram);
 extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef *hsram);
+extern "C" void HAL_SDRAM_MspDeInit(SDRAM_HandleTypeDef* hsdram);
 
 void stm32FmcInit();
 void stm32MpuInit();

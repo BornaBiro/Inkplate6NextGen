@@ -3,16 +3,24 @@
 // Header guard for the Arduino include
 #ifdef BOARD_INKPLATE6_MOTION
 
+// Macro function to round array size to be multiple of 4 (needed for DMA controller, since it works with 32 bit values).
+#define MULTIPLE_OF_4(x) (((x - 1) | 3) + 1)
 
 // Buffer for one Line on the screen from epapper framebuffer from exterenal RAM. It's packed 4 bits per pixel.
 // TODO: Do not use hardcoded size.
-//uint8_t _oneLine[SCREEN_WIDTH / 2];
-__attribute__((section(".dma_buffer"))) uint8_t _oneLine[SCREEN_WIDTH / 2];
+__attribute__((section(".dma_buffer"))) uint8_t _oneLine1[MULTIPLE_OF_4(SCREEN_WIDTH / 2) * 16];
+__attribute__((section(".dma_buffer"))) uint8_t _oneLine2[MULTIPLE_OF_4(SCREEN_WIDTH / 2) * 16];
 // Buffer for decoded pixels modified by the EPD waveform. EPD uses 4 pixels per byte (2 bits per pixel).
-__attribute__((section(".dma_buffer"))) uint8_t _decodedLine[SCREEN_WIDTH / 4];
+__attribute__((section(".dma_buffer"))) uint8_t _decodedLine1[MULTIPLE_OF_4(SCREEN_WIDTH / 4) + 2];
+__attribute__((section(".dma_buffer"))) uint8_t _decodedLine2[MULTIPLE_OF_4(SCREEN_WIDTH / 4) + 2];
+// Pointer to the current used RAM buffer.
+__attribute__((section(".dma_buffer"))) uint8_t* _currentRAMBuffer = NULL;
+// Pointer to the decoded line buffers.
+__attribute__((section(".dma_buffer"))) uint8_t* _currentDecodedLineBuffer = NULL;
+__attribute__((section(".dma_buffer"))) uint8_t* _pendingDecodedLineBuffer = NULL;
 
-extern SRAM_HandleTypeDef hsram1; // EPD
-extern SRAM_HandleTypeDef hsram2; // SDRAM
+extern SRAM_HandleTypeDef hsram1;       // EPD
+extern SDRAM_HandleTypeDef hsdram1;     // SDRAM
 extern MDMA_HandleTypeDef hmdma_mdma_channel40_sw_0;
 extern MDMA_HandleTypeDef hmdma_mdma_channel41_sw_0;
 
@@ -51,7 +59,10 @@ int EPDDriver::initDriver()
 
     // Calculate the GLUT for fast pixel to waveform calculation.
     // TODO: load the waveform and do not use hardcoded number of phases!
-    calculateGLUT((uint8_t*)&(waveform3Bit2[0][0]), &GLUT1, &GLUT2, 15);
+    //calculateGLUT((uint8_t*)&(waveform3Bit2[0][0]), &GLUT1, &GLUT2, 15);
+
+    // Set number of EPD Waveform phases.
+    _wfPhases = 15;
 
     INKPLATE_DEBUG_MGS("EPD Driver init done");
 
@@ -83,9 +94,9 @@ void EPDDriver::cleanFast(uint8_t c, uint8_t rep)
     }
 
     // Fill the buffer with the color.
-    for (int i = 0; i < (sizeof(_decodedLine) / sizeof(uint8_t)); i++)
+    for (int i = 0; i < (sizeof(_decodedLine1)); i++)
     {
-        _decodedLine[i] = data;
+        _decodedLine1[i] = data;
     }
 
     for (int k = 0; k < rep; k++)
@@ -94,13 +105,11 @@ void EPDDriver::cleanFast(uint8_t c, uint8_t rep)
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
             hScanStart(data, data);
-            HAL_MDMA_Start_IT(&hmdma_mdma_channel41_sw_0, (uint32_t)_decodedLine, (uint32_t)EPD_FMC_ADDR, sizeof(_decodedLine) - 2, 1);
-            while(stm32FMCEPDCompleteFlag() == 0);
-            stm32FMCEPDCompleteFlag();
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel41_sw_0, (uint32_t)_decodedLine1, (uint32_t)EPD_FMC_ADDR, sizeof(_decodedLine1) - 2, 1);
+            while(!stm32FMCEPDCompleteFlag());
+            stm32FMCClearEPDCompleteFlag();
             vScanEnd();
         }
-
-        delayMicroseconds(230);
     }
 }
 
@@ -411,69 +420,97 @@ void EPDDriver::display3b(uint8_t _leaveOn)
     // Power up EPD PMIC. Abort update if failed.
     if (!epdPSU(1)) return;
 
-    cleanFast(0, 5);
-    cleanFast(1, 15);
-    cleanFast(2, 2);
-    cleanFast(0, 15);
-    cleanFast(2, 2);
-    cleanFast(1, 15);
-    cleanFast(2, 2);
-    cleanFast(0, 15);
-    cleanFast(2, 2);
+    // Pointer to the framebuffer (used by the fast GLUT). It gets 4 pixels from the framebuffer.
+    uint16_t *_fbPtr;
 
-    //stm32MDMAConfigure(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer, (uint32_t)_oneLine, sizeof(_oneLine));
-    //hsram2.State = HAL_SRAM_STATE_READY;
-    //HAL_SRAM_Read_DMA(&hsram2, (uint32_t*)partialBuffer, (uint32_t*)_oneLine, 1);
-    //HAL_MDMA_PollForTransfer(&hmdma_mdma_channel40_sw_0, HAL_MDMA_FULL_TRANSFER, HAL_MAX_DELAY);
+    cleanFast(0, 5);
+    cleanFast(1, 10);
+    cleanFast(2, 2);
+    cleanFast(0, 10);
+    cleanFast(2, 2);
+    cleanFast(1, 10);
+    cleanFast(2, 2);
+    cleanFast(0, 10);
+    cleanFast(2, 2);
 
     for (int k = 0; k < _wfPhases; k++)
     {
-        uint8_t *dp = (uint8_t*)partialBuffer;
-        uint8_t *_oneLinePtr;
+        // First calculate the new fast GLUT for the next EPD waveform phase.
+        calculateGLUTOnTheFly(_fastGLUT, (uint8_t*)&(waveform3Bit2[0][0]), k, 15);
+
+
+        // Get the 16 rows of the data (faster RAM read speed, since it reads whole RAM column at once).
+        // Reading line by line will gets us only 89MB/s read speed, but reading 16 rows at once will get us ~215MB/s read speed! Nice!
+        // Start the DMA transfer!
+        HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer, (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
+        //while(stm32FMCSRAMCompleteFlag() == 0);
+        //stm32FMCClearSRAMCompleteFlag();
+
+        // Do not forget to offset start address!
+        //HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer + sizeof(_oneLine1), (uint32_t)_oneLine2, sizeof(_oneLine2), 1);
+
+        // Set the current working RAM buffer to the first RAM Buffer (_oneLine1).
+        _currentRAMBuffer = _oneLine1;
+
+        _fbPtr = (uint16_t*)_currentRAMBuffer;
+
+        // Decode the first line
+        for (int n = 0; n < (sizeof(_decodedLine1)); n++)
+        {
+            //_decodedLine1[n] = (GLUT2[(k << 8) + *(_currentRAMBuffer++)]) | (GLUT1[(k << 8) + *(_currentRAMBuffer++)]);
+            _decodedLine1[n] = _fastGLUT[*(_fbPtr++)];
+        }
+        // Set the pointers.
+        _pendingDecodedLineBuffer = _decodedLine2;
+        _currentDecodedLineBuffer = _decodedLine1;
 
         // Send to the screen!
         vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
-            // Copy data from external RAM into intrnal.
-            //hsram2.hmdma = &hmdma_mdma_channel40_sw_0;
-            //if (HAL_SRAM_Read_DMA(&hsram2, (uint32_t*)dp, (uint32_t*)_oneLine, sizeof(_oneLine) / 4) != HAL_OK)
-            //{
-            //    Serial.println("DMA HAS FAILED!");
-            //    return;
-            //}
-            _oneLinePtr = _oneLine;
-            //stm32MDMAModifyAddress(&hmdma_mdma_channel40_sw_0, (uint32_t)dp, (uint32_t)_oneLinePtr);
-            //stm32MDMAStart(&hmdma_mdma_channel40_sw_0);
-            
-            //hsram2.State = HAL_SRAM_STATE_READY;
-            //HAL_SRAM_Read_DMA(&hsram2, (uint32_t*)dp, (uint32_t*)_oneLine, sizeof(_oneLine) / 4);
-            //HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)dp, (uint32_t)_oneLine, sizeof(_oneLine), 1);
-            //while(stm32FMCSRAMCompleteFlag() == 0);
-            //stm32FMCClearSRAMCompleteFlag();
-            for (int n = 0; n < sizeof(_decodedLine); n++)
+            hScanStart(_currentDecodedLineBuffer[0], _currentDecodedLineBuffer[1]);
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel41_sw_0, (uint32_t)_currentDecodedLineBuffer + 2, (uint32_t)EPD_FMC_ADDR, sizeof(_decodedLine1), 1);
+
+            // Decode the pixels into Waveform for EPD.
+            _fbPtr = (uint16_t*)_currentRAMBuffer;
+            for (int n = 0; n < (sizeof(_decodedLine1)); n++)
             {
-                //_decodedLine[n] = GLUT2[(k << 8) + *(_oneLinePtr++)] | GLUT1[(k << 8) + *(_oneLinePtr++)];
-                _decodedLine[n] = 0b01010101;
+                //_decodedLine1[n] = (GLUT2[(k << 8) + *(_currentRAMBuffer++)]) | (GLUT1[(k << 8) + *(_currentRAMBuffer++)]);
+                _pendingDecodedLineBuffer[n] = _fastGLUT[*(_fbPtr++)];
             }
-            //while(stm32MDMATransferComplete(&hmdma_mdma_channel40_sw_0) == 0);
-            //__HAL_MDMA_DISABLE(&hmdma_mdma_channel40_sw_0);
-            //stm32MDMAClearFlag(&hmdma_mdma_channel40_sw_0);
-            //HAL_MDMA_PollForTransfer(&hmdma_mdma_channel40_sw_0, HAL_MDMA_FULL_TRANSFER, HAL_MAX_DELAY);
-            
-            hScanStart(_decodedLine[0], _decodedLine[1]);
-            //for (int j = 2; j < ((SCREEN_WIDTH / 4)); j++)
-            //{
-            //    *(__IO uint8_t *)(EPD_FMC_ADDR) = _decodedLine[j];
-            //}
-            HAL_MDMA_Start_IT(&hmdma_mdma_channel41_sw_0, (uint32_t)_decodedLine, (uint32_t)EPD_FMC_ADDR, sizeof(_decodedLine) - 2, 1);
+
+            // Swap the buffers
+            if (_currentDecodedLineBuffer == _decodedLine1)
+            {
+                _currentDecodedLineBuffer = _decodedLine2;
+                _pendingDecodedLineBuffer = _decodedLine1;
+            }
+            else
+            {
+                _currentDecodedLineBuffer = _decodedLine1;
+                _pendingDecodedLineBuffer = _decodedLine2;
+            }
+
+            // Check if the buffer needs to be swapped (after 16 lines).
+            if ((i & 0b00001111) == 0b00001111)
+            {
+                // Check if the transfer is done.
+                while(stm32FMCSRAMCompleteFlag() == 0);
+                stm32FMCClearSRAMCompleteFlag();
+
+                // Swap the buffers!
+                //_currentRAMBuffer = ((_currentRAMBuffer - sizeof(_oneLine1)) == _oneLine1)?_oneLine2:_oneLine1;
+
+                // Start new RAM DMA transfer.
+                HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer + sizeof(_oneLine1) * i, (uint32_t)((_currentRAMBuffer == _oneLine1)?_oneLine2:_oneLine1), sizeof(_oneLine1), 1);
+               // HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer + (sizeof(_oneLine1) * (i >> 4)), (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
+                //while(stm32FMCSRAMCompleteFlag() == 0);
+                //stm32FMCClearSRAMCompleteFlag();
+                _currentRAMBuffer = _oneLine1;
+            }
             while(stm32FMCEPDCompleteFlag() == 0);
-            stm32FMCEPDCompleteFlag();
-            
+            stm32FMCClearEPDCompleteFlag();
             vScanEnd();
-            
-            // Advance pointer of the framebuffer
-            dp += (SCREEN_WIDTH / 2);
         }
     }
     cleanFast(2, 1);
@@ -572,18 +609,18 @@ void EPDDriver::gpioInit()
 {
     // For some reason, HAL doesn't initalize GPIOs for FMC properly, so it has to be done with Arduino pinMode() function.
     pinMode(PF0, OUTPUT);
-    pinMode(PE3, OUTPUT);
-    pinMode(PF0, OUTPUT);
     pinMode(PF1, OUTPUT);
     pinMode(PF2, OUTPUT);
     pinMode(PF3, OUTPUT);
     pinMode(PF4, OUTPUT);
     pinMode(PF5, OUTPUT);
+    pinMode(PC0, OUTPUT);
+    pinMode(PF11, OUTPUT);
     pinMode(PF12, OUTPUT);
     pinMode(PF13, OUTPUT);
     pinMode(PF14, OUTPUT);
     pinMode(PF15, OUTPUT);
-    pinMode(PG0, OUTPUT); 
+    pinMode(PG0, OUTPUT);
     pinMode(PG1, OUTPUT);
     pinMode(PE7, OUTPUT);
     pinMode(PE8, OUTPUT);
@@ -597,21 +634,20 @@ void EPDDriver::gpioInit()
     pinMode(PD8, OUTPUT);
     pinMode(PD9, OUTPUT);
     pinMode(PD10, OUTPUT);
-    pinMode(PD11, OUTPUT);
-    pinMode(PD12, OUTPUT);
-    pinMode(PD13, OUTPUT);
     pinMode(PD14, OUTPUT);
     pinMode(PD15, OUTPUT);
     pinMode(PG2, OUTPUT);
-    pinMode(PG3, OUTPUT);
     pinMode(PG4, OUTPUT);
     pinMode(PG5, OUTPUT);
-    pinMode(PG6, OUTPUT);
-    pinMode(PC7, OUTPUT);
+    pinMode(PG10, OUTPUT);
+    pinMode(PG8, OUTPUT);
     pinMode(PD0, OUTPUT);
     pinMode(PD1, OUTPUT);
     pinMode(PD4, OUTPUT);
     pinMode(PD5, OUTPUT);
+    pinMode(PG15, OUTPUT);
+    pinMode(PB5, OUTPUT);
+    pinMode(PB6, OUTPUT);
     pinMode(PE0, OUTPUT);
     pinMode(PE1, OUTPUT);
 
@@ -711,6 +747,18 @@ void EPDDriver::calculateGLUT(uint8_t *_waveform, uint8_t **_lut1, uint8_t **_lu
             (*_lut1)[j * 256 + i] = (_waveform[(i & 0x0F) * _phases + j] << 2) | (_waveform[((i >> 4) & 0x0F) * _phases + j]);
             (*_lut2)[j * 256 + i] = ((_waveform[(i & 0x0F) * _phases + j] << 2) | (_waveform[((i >> 4) & 0x0F) * _phases + j])) << 4;
         }
+    }
+
+    // Save number of current waveform phases.
+    _wfPhases = _phases;
+}
+
+void EPDDriver::calculateGLUTOnTheFly(uint8_t *_lut, uint8_t *_waveform, int _currentPhase, int _phases)
+{
+    for (uint32_t i = 0; i < 65536; i++)
+    {
+        _lut[i] = (_waveform[(i & 0x0F) * _phases + _currentPhase] << 2) | (_waveform[((i >> 4) & 0x0F) * _phases + _currentPhase]);
+        _lut[i] |= (_waveform[(((i >> 12) & 0x000F) * _phases) + _currentPhase] << 4) | (_waveform[(((i >> 8) & 0x000F) * _phases) + _currentPhase] << 6);
     }
 
     // Save number of current waveform phases.

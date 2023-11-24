@@ -2,32 +2,28 @@
 #include "stm32FMC.h"
 
 // FMC HAL Typedefs and init status variables.
+// Handle for the FMC LCD interface (for EPD).
 SRAM_HandleTypeDef hsram1;
-SRAM_HandleTypeDef hsram2;
+// Handle for the SDRAM FMC interface.
+SDRAM_HandleTypeDef hsdram1;
+// Handle for Master DMA for SDRAM.
 MDMA_HandleTypeDef hmdma_mdma_channel40_sw_0;
+// Handle for Master DMA for FMC LCD (EPD).
 MDMA_HandleTypeDef hmdma_mdma_channel41_sw_0;
+// Handle memory protection unit.
 MPU_Region_InitTypeDef MPU_InitStructEPD;
 static uint32_t FMC_Initialized = 0;
 static uint32_t FMC_DeInitialized = 0;
 
-volatile uint8_t _stm32MdmaEPDCompleteFlag = 0;
-volatile uint8_t _stm32MdmaSRAMCompleteFlag = 0;
+uint8_t _stm32MdmaEPDCompleteFlag = 0;
+uint8_t _stm32MdmaSRAMCompleteFlag = 0;
 
 // Really low level STM32 related stuff. Do not change anything unless you really know what you are doing!
-
 /* FMC initialization function */
 static void MX_FMC_Init(void)
 {
-    /* USER CODE BEGIN FMC_Init 0 */
-
-    /* USER CODE END FMC_Init 0 */
-
     FMC_NORSRAM_TimingTypeDef Timing = {0};
-    FMC_NORSRAM_TimingTypeDef ExtTiming = {0};
-
-    /* USER CODE BEGIN FMC_Init 1 */
-
-    /* USER CODE END FMC_Init 1 */
+    FMC_SDRAM_TimingTypeDef SdramTiming = {0};
 
     /** Perform the SRAM1 memory initialization sequence
      */
@@ -52,56 +48,93 @@ static void MX_FMC_Init(void)
     /* Timing */
     Timing.AddressSetupTime = 0;
     Timing.AddressHoldTime = 0;
-    Timing.DataSetupTime = 2; // ED060KC1
+    Timing.DataSetupTime = 2;
     Timing.BusTurnAroundDuration = 0;
-    Timing.CLKDivision = 0;
-    Timing.DataLatency = 0;
+    Timing.CLKDivision = 1;
+    Timing.DataLatency = 1;
     Timing.AccessMode = FMC_ACCESS_MODE_A;
     /* ExtTiming */
 
     if (HAL_SRAM_Init(&hsram1, &Timing, NULL) != HAL_OK)
     {
+        Error_Handler( );
+    }
+
+    /** Perform the SDRAM1 memory initialization sequence
+     */
+    hsdram1.Instance = FMC_SDRAM_DEVICE;
+    /* hsdram1.Init */
+    hsdram1.Init.SDBank = FMC_SDRAM_BANK2;
+    hsdram1.Init.ColumnBitsNumber = FMC_SDRAM_COLUMN_BITS_NUM_9;
+    hsdram1.Init.RowBitsNumber = FMC_SDRAM_ROW_BITS_NUM_13;
+    hsdram1.Init.MemoryDataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16;
+    hsdram1.Init.InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4;
+    hsdram1.Init.CASLatency = FMC_SDRAM_CAS_LATENCY_2;
+    hsdram1.Init.WriteProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE;
+    hsdram1.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
+    hsdram1.Init.ReadBurst = FMC_SDRAM_RBURST_ENABLE;
+    hsdram1.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_0;
+    /* SdramTiming */
+    SdramTiming.LoadToActiveDelay = 2;
+    SdramTiming.ExitSelfRefreshDelay = 10;
+    SdramTiming.SelfRefreshTime = 2;
+    SdramTiming.RowCycleDelay = 8;
+    SdramTiming.WriteRecoveryTime = 4;
+    SdramTiming.RPDelay = 2;
+    SdramTiming.RCDDelay = 2;
+
+    if (HAL_SDRAM_Init(&hsdram1, &SdramTiming) != HAL_OK)
+    {
+        Error_Handler( );
+    }
+
+    __IO uint32_t tmpmrd              = 0;
+    FMC_SDRAM_CommandTypeDef Command  = {0};
+
+    Command.CommandMode               = FMC_SDRAM_CMD_CLK_ENABLE; /* Set MODE bits to "001" */
+    Command.CommandTarget             = FMC_SDRAM_CMD_TARGET_BANK2; /* configure the Target Bank bits */
+    Command.AutoRefreshNumber         = 1;
+    Command.ModeRegisterDefinition    = 0;
+    if (HAL_SDRAM_SendCommand(&hsdram1, &Command, 0xfff) != HAL_OK)
+    {
         Error_Handler();
     }
 
-    /** Perform the SRAM2 memory initialization sequence
-     */
-    hsram2.Instance = FMC_NORSRAM_DEVICE;
-    hsram2.Extended = FMC_NORSRAM_EXTENDED_DEVICE;
-    /* hsram2.Init */
-    hsram2.Init.NSBank = FMC_NORSRAM_BANK1;
-    hsram2.Init.DataAddressMux = FMC_DATA_ADDRESS_MUX_DISABLE;
-    hsram2.Init.MemoryType = FMC_MEMORY_TYPE_SRAM;
-    hsram2.Init.MemoryDataWidth = FMC_NORSRAM_MEM_BUS_WIDTH_16;
-    hsram2.Init.BurstAccessMode = FMC_BURST_ACCESS_MODE_DISABLE;
-    hsram2.Init.WaitSignalPolarity = FMC_WAIT_SIGNAL_POLARITY_LOW;
-    hsram2.Init.WaitSignalActive = FMC_WAIT_TIMING_BEFORE_WS;
-    hsram2.Init.WriteOperation = FMC_WRITE_OPERATION_ENABLE;
-    hsram2.Init.WaitSignal = FMC_WAIT_SIGNAL_DISABLE;
-    hsram2.Init.ExtendedMode = FMC_EXTENDED_MODE_DISABLE;
-    hsram2.Init.AsynchronousWait = FMC_ASYNCHRONOUS_WAIT_DISABLE;
-    hsram2.Init.WriteBurst = FMC_WRITE_BURST_ENABLE;
-    hsram2.Init.ContinuousClock = FMC_CONTINUOUS_CLOCK_SYNC_ONLY;
-    hsram2.Init.WriteFifo = FMC_WRITE_FIFO_DISABLE;
-    hsram2.Init.PageSize = FMC_PAGE_SIZE_NONE;
-    /* Timing */
-    Timing.AddressSetupTime = 3;
-    Timing.AddressHoldTime = 0;
-    Timing.DataSetupTime = 2;
-    Timing.BusTurnAroundDuration = 0;
-    Timing.CLKDivision = 0;
-    Timing.DataLatency = 0;
-    Timing.AccessMode = FMC_ACCESS_MODE_D;
-    /* ExtTiming - Write only */
-    ExtTiming.AddressSetupTime = 3;
-    ExtTiming.AddressHoldTime = 0;
-    ExtTiming.DataSetupTime = 1;
-    ExtTiming.BusTurnAroundDuration = 0;
-    ExtTiming.CLKDivision = 0;
-    ExtTiming.DataLatency = 0;
-    ExtTiming.AccessMode = FMC_ACCESS_MODE_D;
+    HAL_Delay(1); /* Step 4: Insert 100 us minimum delay - Min HAL Delay is 1ms */
 
-    if (HAL_SRAM_Init(&hsram2, &Timing, NULL) != HAL_OK)
+    /* Step 5: Configure a PALL (precharge all) command */
+    Command.CommandMode               = FMC_SDRAM_CMD_PALL; /* Set MODE bits to "010" */
+    Command.CommandTarget             = FMC_SDRAM_CMD_TARGET_BANK2;
+    Command.AutoRefreshNumber         = 1;
+    Command.ModeRegisterDefinition    = 0;
+    if(HAL_SDRAM_SendCommand(&hsdram1, &Command, 0xfff) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Step 6: Configure an Auto Refresh command */
+    Command.CommandMode               = FMC_SDRAM_CMD_AUTOREFRESH_MODE; /* Set MODE bits to "011" */
+    Command.CommandTarget             = FMC_SDRAM_CMD_TARGET_BANK2;
+    Command.AutoRefreshNumber         = 8;
+    Command.ModeRegisterDefinition   = 0;
+    if (HAL_SDRAM_SendCommand(&hsdram1, &Command, 0xfff) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Step 7: Program the external memory mode register */
+    tmpmrd                            = (0 << 0) | (0 << 2) | (2 << 4) | (0 << 7) | (1 << 9);
+    Command.CommandMode               = FMC_SDRAM_CMD_LOAD_MODE;
+    Command.ModeRegisterDefinition    = tmpmrd;
+    Command.CommandTarget             = FMC_SDRAM_CMD_TARGET_BANK2;
+    Command.AutoRefreshNumber        = 1;
+    HAL_SDRAM_SendCommand(&hsdram1, &Command, 0xfff);
+
+    /* Step 8: Set the refresh rate counter - refer to section SDRAM refresh timer register in RM0455 */
+    /* Set the device refresh rate
+    * COUNT = [(SDRAM self refresh time / number of row) x  SDRAM CLK] – 20
+            = [(64ms/8192) * 133.3333MHz] - 20 = 1021.6667 */
+    if (HAL_SDRAM_ProgramRefreshRate(&hsdram1, 1022) != HAL_OK)
     {
         Error_Handler();
     }
@@ -109,44 +142,43 @@ static void MX_FMC_Init(void)
 
 static void HAL_FMC_MspInit(void)
 {
-    /* USER CODE BEGIN FMC_MspInit 0 */
-
-    /* USER CODE END FMC_MspInit 0 */
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitTypeDef GPIO_InitStruct ={0};
     if (FMC_Initialized)
     {
         return;
     }
     FMC_Initialized = 1;
+    
     RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
     /** Initializes the peripherals clock
-    */
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
-    PeriphClkInitStruct.PLL2.PLL2M = 4;
-    PeriphClkInitStruct.PLL2.PLL2N = 150;
-    PeriphClkInitStruct.PLL2.PLL2P = 2;
-    PeriphClkInitStruct.PLL2.PLL2Q = 2;
-    PeriphClkInitStruct.PLL2.PLL2R = 2;
-    PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
-    PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
-    PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL2;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-    {
-      Error_Handler();
-    }
+     */
+        PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
+        PeriphClkInitStruct.PLL2.PLL2M = 6;
+        PeriphClkInitStruct.PLL2.PLL2N = 200;
+        PeriphClkInitStruct.PLL2.PLL2P = 2;
+        PeriphClkInitStruct.PLL2.PLL2Q = 2;
+        PeriphClkInitStruct.PLL2.PLL2R = 2;
+        PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_1;
+        PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
+        PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL2;
+        if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+        {
+        Error_Handler();
+        }
 
     /* Peripheral clock enable */
     __HAL_RCC_FMC_CLK_ENABLE();
 
     /** FMC GPIO Configuration
-    PE3   ------> FMC_A19
-    PF0   ------> FMC_A0
+     PF0   ------> FMC_A0
     PF1   ------> FMC_A1
     PF2   ------> FMC_A2
     PF3   ------> FMC_A3
     PF4   ------> FMC_A4
     PF5   ------> FMC_A5
+    PC0   ------> FMC_SDNWE
+    PF11   ------> FMC_SDNRAS
     PF12   ------> FMC_A6
     PF13   ------> FMC_A7
     PF14   ------> FMC_A8
@@ -165,65 +197,71 @@ static void HAL_FMC_MspInit(void)
     PD8   ------> FMC_D13
     PD9   ------> FMC_D14
     PD10   ------> FMC_D15
-    PD11   ------> FMC_A16
-    PD12   ------> FMC_A17
-    PD13   ------> FMC_A18
     PD14   ------> FMC_D0
     PD15   ------> FMC_D1
     PG2   ------> FMC_A12
-    PG3   ------> FMC_A13
-    PG4   ------> FMC_A14
-    PG5   ------> FMC_A15
-    PG6   ------> FMC_NE3
-    PC7   ------> FMC_NE1
+    PG4   ------> FMC_BA0
+    PG5   ------> FMC_BA1
+    PG8   ------> FMC_SDCLK
     PD0   ------> FMC_D2
     PD1   ------> FMC_D3
     PD4   ------> FMC_NOE
     PD5   ------> FMC_NWE
+    PG10   ------> FMC_NE3
+    PG15   ------> FMC_SDNCAS
+    PB5   ------> FMC_SDCKE1
+    PB6   ------> FMC_SDNE1
     PE0   ------> FMC_NBL0
     PE1   ------> FMC_NBL1
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 |
-                          GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15 | GPIO_PIN_0 | GPIO_PIN_1;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
-    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_12 |
-                          GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
+                            |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_11|GPIO_PIN_12
+                            |GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
     HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_10;
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4
+                            |GPIO_PIN_5|GPIO_PIN_8|GPIO_PIN_10|GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
     HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 |
-                          GPIO_PIN_14 | GPIO_PIN_15 | GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5;
+    GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10
+                            |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
+                            |GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_14
+                            |GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4
+                            |GPIO_PIN_5;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_7;
+    GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF9_FMC;
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-    /* USER CODE BEGIN FMC_MspInit 1 */
-    __HAL_RCC_GPIOF_CLK_ENABLE();
-    /* USER CODE END FMC_MspInit 1 */
+    GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 }
 
 extern "C" void HAL_SRAM_MspInit(SRAM_HandleTypeDef *hsram)
@@ -233,25 +271,24 @@ extern "C" void HAL_SRAM_MspInit(SRAM_HandleTypeDef *hsram)
 
 static void HAL_FMC_MspDeInit(void)
 {
-    /* USER CODE BEGIN FMC_MspDeInit 0 */
-
-    /* USER CODE END FMC_MspDeInit 0 */
     if (FMC_DeInitialized)
     {
         return;
     }
     FMC_DeInitialized = 1;
+
     /* Peripheral clock enable */
     __HAL_RCC_FMC_CLK_DISABLE();
 
     /** FMC GPIO Configuration
-    PE3   ------> FMC_A19
-    PF0   ------> FMC_A0
+     PF0   ------> FMC_A0
     PF1   ------> FMC_A1
     PF2   ------> FMC_A2
     PF3   ------> FMC_A3
     PF4   ------> FMC_A4
     PF5   ------> FMC_A5
+    PC0   ------> FMC_SDNWE
+    PF11   ------> FMC_SDNRAS
     PF12   ------> FMC_A6
     PF13   ------> FMC_A7
     PF14   ------> FMC_A8
@@ -270,46 +307,49 @@ static void HAL_FMC_MspDeInit(void)
     PD8   ------> FMC_D13
     PD9   ------> FMC_D14
     PD10   ------> FMC_D15
-    PD11   ------> FMC_A16
-    PD12   ------> FMC_A17
-    PD13   ------> FMC_A18
     PD14   ------> FMC_D0
     PD15   ------> FMC_D1
     PG2   ------> FMC_A12
-    PG3   ------> FMC_A13
-    PG4   ------> FMC_A14
-    PG5   ------> FMC_A15
-    PG6   ------> FMC_NE3
-    PC7   ------> FMC_NE1
+    PG4   ------> FMC_BA0
+    PG5   ------> FMC_BA1
+    PG8   ------> FMC_SDCLK
     PD0   ------> FMC_D2
     PD1   ------> FMC_D3
     PD4   ------> FMC_NOE
     PD5   ------> FMC_NWE
+    PG10   ------> FMC_NE3
+    PG15   ------> FMC_SDNCAS
+    PB5   ------> FMC_SDCKE1
+    PB6   ------> FMC_SDNE1
     PE0   ------> FMC_NBL0
     PE1   ------> FMC_NBL1
-    PE4   ------> FMC_A20
-    PE5   ------> FMC_A21
     */
-    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 |
-                               GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15 | GPIO_PIN_0 |
-                               GPIO_PIN_1);
+    HAL_GPIO_DeInit(GPIOF, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
+                            |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_11|GPIO_PIN_12
+                            |GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15);
 
-    HAL_GPIO_DeInit(GPIOF, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_12 |
-                               GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15);
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0);
 
-    HAL_GPIO_DeInit(GPIOG, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_10);
+    HAL_GPIO_DeInit(GPIOG, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4
+                            |GPIO_PIN_5|GPIO_PIN_8|GPIO_PIN_10|GPIO_PIN_15);
 
-    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 |
-                               GPIO_PIN_14 | GPIO_PIN_15 | GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5);
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10
+                            |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
+                            |GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1);
 
-    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_7);
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_14
+                            |GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4
+                            |GPIO_PIN_5);
 
-    /* USER CODE BEGIN FMC_MspDeInit 1 */
-
-    /* USER CODE END FMC_MspDeInit 1 */
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_5|GPIO_PIN_6);
 }
 
 extern "C" void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef *hsram)
+{
+    HAL_FMC_MspDeInit();
+}
+
+extern "C" void HAL_SDRAM_MspDeInit(SDRAM_HandleTypeDef* hsdram)
 {
     HAL_FMC_MspDeInit();
 }
@@ -347,7 +387,7 @@ void stm32FmcInit()
     stm32MDMAInit();
 
     // Link FMC and Master DMA for RAM.
-    hsram2.hmdma = &hmdma_mdma_channel40_sw_0;
+    hsdram1.hmdma = &hmdma_mdma_channel40_sw_0;
 
     // Link FMC and Master DMA for EPD.
     hsram1.hmdma = &hmdma_mdma_channel41_sw_0;
@@ -392,11 +432,11 @@ void stm32MDMAInit()
     hmdma_mdma_channel41_sw_0.Instance = MDMA_Channel1;
     hmdma_mdma_channel41_sw_0.Init.Request = MDMA_REQUEST_SW;
     hmdma_mdma_channel41_sw_0.Init.TransferTriggerMode = MDMA_BLOCK_TRANSFER;
-    hmdma_mdma_channel41_sw_0.Init.Priority = MDMA_PRIORITY_VERY_HIGH;
+    hmdma_mdma_channel41_sw_0.Init.Priority = MDMA_PRIORITY_HIGH;
     hmdma_mdma_channel41_sw_0.Init.Endianness = MDMA_LITTLE_ENDIANNESS_PRESERVE;
-    hmdma_mdma_channel41_sw_0.Init.SourceInc = MDMA_SRC_INC_WORD;
+    hmdma_mdma_channel41_sw_0.Init.SourceInc = MDMA_SRC_INC_BYTE;
     hmdma_mdma_channel41_sw_0.Init.DestinationInc = MDMA_DEST_INC_DISABLE;
-    hmdma_mdma_channel41_sw_0.Init.SourceDataSize = MDMA_SRC_DATASIZE_WORD;
+    hmdma_mdma_channel41_sw_0.Init.SourceDataSize = MDMA_SRC_DATASIZE_BYTE;
     hmdma_mdma_channel41_sw_0.Init.DestDataSize = MDMA_DEST_DATASIZE_BYTE;
     hmdma_mdma_channel41_sw_0.Init.DataAlignment = MDMA_DATAALIGN_PACKENABLE;
     hmdma_mdma_channel41_sw_0.Init.BufferTransferLength = 128;
@@ -412,7 +452,6 @@ void stm32MDMAInit()
     HAL_NVIC_SetPriority(MDMA_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(MDMA_IRQn);
 }
-
 
 /**
  * @brief       It disables cacheing on LCD FMC memory area, but not affecting caching on SRAM by using MPU.

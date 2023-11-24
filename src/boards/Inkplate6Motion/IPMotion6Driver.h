@@ -32,16 +32,11 @@
 // FMC address for sending data to the EPD.
 #define EPD_FMC_ADDR    0x68000000
 
+// Fast LUT table for conversion from 2 * 4 bit grayscale pixel to EPD Wavefrom.
+static uint8_t _fastGLUT[65536];
+
 // --- Functions declared static inline here for less calling overhead. ---
 // TODO: Try to store this function into the the internal RAM for faster execution.
-
-// Custom delay function for more precise delays.
-static inline void delayUS(float _t)
-{
-    int32_t start = dwt_getCycles();
-    int32_t cycles = int32_t(_t * (SystemCoreClock / 1000000));
-    while ((int32_t)dwt_getCycles() - start < cycles);
-}
 
 // Start writing the frame on the epaper display.
 static inline void vScanStart()
@@ -67,13 +62,19 @@ static inline void vScanStart()
     CKV_CLEAR;
 }
 
+// Compiler be nice, please do not optimise this function.
+__attribute__((optimize("O0"))) static inline void cycleDelay(uint32_t _cycles)
+{
+    while(_cycles--);
+}
+
 // Start writing the first line into epaper display.
-__attribute__((always_inline)) static void hScanStart(uint8_t _d1, uint8_t _d2)
+__attribute__((always_inline)) static inline void hScanStart(uint8_t _d1, uint8_t _d2)
 {
     SPH_CLEAR;
     CKV_SET;
     *(__IO uint8_t *)(EPD_FMC_ADDR) = _d1;
-    delayUS(0.4);
+    cycleDelay(10ULL);
     SPH_SET;
     *(__IO uint8_t *)(EPD_FMC_ADDR) = _d2;
 }
@@ -82,11 +83,11 @@ __attribute__((always_inline)) static void hScanStart(uint8_t _d1, uint8_t _d2)
 __attribute__((always_inline)) static inline void vScanEnd()
 {
     CKV_CLEAR;
-    delayUS(0.5);
+    cycleDelay(10ULL);
     LE_SET;
     *(__IO uint8_t *)(EPD_FMC_ADDR) = 0;
     LE_CLEAR;
-    delayUS(0.5);
+    cycleDelay(10ULL);
 }
 // --- End of static inline declared functions. ---
 
@@ -114,8 +115,8 @@ class EPDDriver
         void gpioInit();
 
         // External SRAM buffers.
-        __IO uint8_t *imageBuffer = (__IO uint8_t *)0x60000000;
-        __IO uint8_t *partialBuffer = (__IO uint8_t *)0x600BD7C0;
+        __IO uint8_t *imageBuffer = (__IO uint8_t *)0xD0000000;
+        __IO uint8_t *partialBuffer = (__IO uint8_t *)0xD0100000;
 
     private:
         // LUT for wavefrom calculation.
@@ -130,6 +131,9 @@ class EPDDriver
 
         // Fuctions calculates the LUT table for the current wavefrom
         void calculateGLUT(uint8_t *_waveform, uint8_t **_lut1, uint8_t **_lut2, int _phases);
+
+        // Function calculates 4 pixels at once from 4 bit per pixel buffer on the fly (before start writing new frame),
+        void calculateGLUTOnTheFly(uint8_t *_lut, uint8_t *_waveform, int _currentPhase, int _phases);
 
         uint8_t _displayMode = INKPLATE_1BW;
         
