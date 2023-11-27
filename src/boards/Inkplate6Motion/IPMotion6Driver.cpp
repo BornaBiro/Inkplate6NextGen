@@ -443,11 +443,11 @@ void EPDDriver::display3b(uint8_t _leaveOn)
         // Reading line by line will gets us only 89MB/s read speed, but reading 16 rows at once will get us ~215MB/s read speed! Nice!
         // Start the DMA transfer!
         HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer, (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
-        //while(stm32FMCSRAMCompleteFlag() == 0);
-        //stm32FMCClearSRAMCompleteFlag();
+        while(stm32FMCSRAMCompleteFlag() == 0);
+        stm32FMCClearSRAMCompleteFlag();
 
         // Do not forget to offset start address!
-        //HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer + sizeof(_oneLine1), (uint32_t)_oneLine2, sizeof(_oneLine2), 1);
+        HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer + sizeof(_oneLine1), (uint32_t)_oneLine2, sizeof(_oneLine2), 1);
 
         // Set the current working RAM buffer to the first RAM Buffer (_oneLine1).
         _currentRAMBuffer = _oneLine1;
@@ -495,18 +495,18 @@ void EPDDriver::display3b(uint8_t _leaveOn)
             if ((i & 0b00001111) == 0b00001111)
             {
                 // Check if the transfer is done.
-                while(stm32FMCSRAMCompleteFlag() == 0);
-                stm32FMCClearSRAMCompleteFlag();
+                //while(stm32FMCSRAMCompleteFlag() == 0);
+                //stm32FMCClearSRAMCompleteFlag();
 
                 // Swap the buffers!
-                //_currentRAMBuffer = ((_currentRAMBuffer - sizeof(_oneLine1)) == _oneLine1)?_oneLine2:_oneLine1;
+                _currentRAMBuffer = ((_currentRAMBuffer - sizeof(_oneLine1)) == _oneLine1)?_oneLine2:_oneLine1;
 
                 // Start new RAM DMA transfer.
                 HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer + sizeof(_oneLine1) * i, (uint32_t)((_currentRAMBuffer == _oneLine1)?_oneLine2:_oneLine1), sizeof(_oneLine1), 1);
                // HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer + (sizeof(_oneLine1) * (i >> 4)), (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
                 //while(stm32FMCSRAMCompleteFlag() == 0);
                 //stm32FMCClearSRAMCompleteFlag();
-                _currentRAMBuffer = _oneLine1;
+                //_currentRAMBuffer = _oneLine1;
             }
             while(stm32FMCEPDCompleteFlag() == 0);
             stm32FMCClearEPDCompleteFlag();
@@ -757,12 +757,16 @@ void EPDDriver::calculateGLUTOnTheFly(uint8_t *_lut, uint8_t *_waveform, int _cu
 {
     for (uint32_t i = 0; i < 65536; i++)
     {
-        _lut[i] = (_waveform[(i & 0x0F) * _phases + _currentPhase] << 2) | (_waveform[((i >> 4) & 0x0F) * _phases + _currentPhase]);
-        _lut[i] |= (_waveform[(((i >> 12) & 0x000F) * _phases) + _currentPhase] << 4) | (_waveform[(((i >> 8) & 0x000F) * _phases) + _currentPhase] << 6);
-    }
+        uint16_t lowBits = (i >> 12) & 0x000F;
+        uint16_t highBits = (i >> 8) & 0x000F;
 
-    // Save number of current waveform phases.
-    _wfPhases = _phases;
+        uint8_t val1 = _waveform[(i & 0x0F) * _phases + _currentPhase];
+        uint8_t val2 = _waveform[((i >> 4) & 0x0F) * _phases + _currentPhase];
+        uint8_t val3 = _waveform[lowBits * _phases + _currentPhase];
+        uint8_t val4 = _waveform[highBits * _phases + _currentPhase];
+
+        _lut[i] = (val1 << 2) + val2 + (val3 << 4) + (val4 << 6);
+    }
 }
 
 void EPDDriver::selectDisplayMode(uint8_t _mode)
