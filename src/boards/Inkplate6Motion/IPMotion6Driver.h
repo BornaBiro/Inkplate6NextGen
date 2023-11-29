@@ -133,7 +133,7 @@ class EPDDriver
         void calculateGLUT(uint8_t *_waveform, uint8_t **_lut1, uint8_t **_lut2, int _phases);
 
         // Function calculates 4 pixels at once from 4 bit per pixel buffer on the fly (before start writing new frame),
-        void calculateGLUTOnTheFly(uint8_t *_lut, uint8_t *_waveform, int _currentPhase, int _phases);
+        void calculateGLUTOnTheFly(uint8_t *_lut, uint8_t *_waveform);
 
         uint8_t _displayMode = INKPLATE_1BW;
         

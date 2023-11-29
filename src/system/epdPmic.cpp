@@ -31,21 +31,21 @@ void EpdPmic::setVCOM(double _vcom)
     // Array for VCOM registers.
     uint8_t _vcomRegs[2] = {0, 0};
 
-    // First divide VCOM voltage by ten.
-    _vcom /= 10;
-
-    // Convert it to interger and remove "-" sign.
-    int _vcomInteger = (int)(abs(_vcom));
+    // First divide VCOM voltage by 100 and remove the "-" sign.
+    _vcom = abs(_vcom) * 100;
 
     // Get the VCOM2 register
-    readRegister(TPS65186_VCOM1, &_vcomRegs[1], 1);
+    readRegister(TPS65186_VCOM2, &_vcomRegs[1], 1);
 
     // Save lower 8 bits into VCOM1
-    _vcomRegs[0] = (uint8_t)(_vcomInteger);
+    _vcomRegs[0] = (int)(_vcom);
 
     // Save upper 9th bit of the VCOM into bitst bit of the VCOM2 register.
     _vcomRegs[1] &= 0b11111110;
-    _vcomRegs[1] |= (_vcomInteger >> 8) & 1;
+    _vcomRegs[1] |= ((int)_vcom >> 8) & 1;
+
+    // Write data to the PMIC.
+    writeRegister(TPS65186_VCOM1, _vcomRegs, 2);
 }
 
 double EpdPmic::getVCOM()
@@ -147,11 +147,7 @@ void EpdPmic::writeRegister(uint8_t _reg, uint8_t *_data, uint8_t _n)
     Wire.write(_reg);
 
     // Write the data to the register.
-    Wire.requestFrom(TPS_PMIC_ADDR, _n);
-    while (_n--)
-    {
-        _data[_n] = Wire.read();
-    }
+    Wire.write(_data, _n);
 
     // Finish I2C transmission.
     Wire.endTransmission();
