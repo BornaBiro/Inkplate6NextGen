@@ -114,9 +114,15 @@ class EPDDriver
         // Function initializes all GPIO pins used on Inkplate for driving EPD.
         void gpioInit();
 
-        // External SRAM buffers.
-        __IO uint8_t *imageBuffer = (__IO uint8_t *)0xD0000000;
-        __IO uint8_t *partialBuffer = (__IO uint8_t *)0xD0100000;
+        // External SRAM frame buffers astart addresses. Statically allocated due speed.
+        // Frame buffer for current image on the screen. 1MB in size (1048576 bytes).
+        __IO uint8_t *_currentScreenFB = (__IO uint8_t *)0xD0000000;
+
+        // Frame buffer for the image that will be written to the screen on update. 1MB in size (1048576 bytes).
+        __IO uint8_t *_pendingScreenFB = (__IO uint8_t *)0xD0100000;
+
+        // "Scratchpad memory" used for calculations (partial update for example). 6MB in size (6291456 bytes).
+        __IO uint8_t *_scratchpadMemory = (__IO uint8_t *)0xD0200000;
 
     private:
         // LUT for wavefrom calculation.
@@ -132,15 +138,21 @@ class EPDDriver
         // Fuctions calculates the LUT table for the current wavefrom
         void calculateGLUT(uint8_t *_waveform, uint8_t **_lut1, uint8_t **_lut2, int _phases);
 
-        // Function calculates 4 pixels at once from 4 bit per pixel buffer on the fly (before start writing new frame),
+        // Function calculates 4 pixels at once from 4 bit per pixel buffer on the fly (before start writing new frame).
+        // With this we can crate LUT that will take all 4 pixels from the frame buffer and convert them into waveform.
         void calculateGLUTOnTheFly(uint8_t *_lut, uint8_t *_waveform);
 
+        // Function calculates the difference between tfo framebuffers (usually between current image on the screen and pending in the MCU memory).
+        // Also returns the number of pixel that will be changed.
+        uint32_t differenceMask(uint8_t *_currentScreenFB, uint8_t *_pendingScreenFB, uint8_t *_helperArray, uint8_t *_differenceMask);
+
+        // Current display mode. By defaul, set it to 1 bit B&W mode.
         uint8_t _displayMode = INKPLATE_1BW;
         
         // Block partial update at startup, use full update.
         uint8_t _blockPartial = 1;
 
-        // Number of waveform phases.
+        // Number of total waveform phases in the current EPD waveform. 
         int _wfPhases = 0;
 };
 

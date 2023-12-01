@@ -7,8 +7,9 @@
 #define MULTIPLE_OF_4(x) (((x - 1) | 3) + 1)
 
 // Buffer for one Line on the screen from epapper framebuffer from exterenal RAM. It's packed 4 bits per pixel.
-// TODO: Do not use hardcoded size.
 __attribute__((section(".dma_buffer"))) uint8_t _oneLine1[MULTIPLE_OF_4(SCREEN_WIDTH / 2) * 16];
+__attribute__((section(".dma_buffer"))) uint8_t _oneLine2[MULTIPLE_OF_4(SCREEN_WIDTH / 2) * 16];
+__attribute__((section(".dma_buffer"))) uint8_t _oneLine3[MULTIPLE_OF_4(SCREEN_WIDTH / 2) * 16];
 // Buffer for decoded pixels modified by the EPD waveform. EPD uses 4 pixels per byte (2 bits per pixel).
 __attribute__((section(".dma_buffer"))) uint8_t _decodedLine1[MULTIPLE_OF_4(SCREEN_WIDTH / 4) + 2];
 __attribute__((section(".dma_buffer"))) uint8_t _decodedLine2[MULTIPLE_OF_4(SCREEN_WIDTH / 4) + 2];
@@ -50,12 +51,33 @@ int EPDDriver::initDriver()
     // Set VCOM to -2.45V (for testing only).
     pmic.setVCOM(-1.75);
 
-    // Init STM32 FMC (Flexible memory controller) for faster pushing data to panel using Hardware (similar to ESP32 I2S
+    // Init STM32 FMC (Flexible memory controller) for faster pushing data to panel using Hardware (similar to ESP32 I2S).
     // Parallel, but much faster and better).
     stm32FmcInit();
 
     // Send proper power up sequence for EPD.
     pmic.setPowerOffSeq(0b00000000, 0b00000000);
+
+    // Turn off EPD PMIC.
+    WAKEUP_CLEAR;
+
+    // Clear the framebuffers.
+    // Set the color (white).
+    memset(_oneLine1, 0xFF, sizeof(_oneLine1));
+
+    // Fill the buffers with DMA!
+    for (int i = 0; i < SCREEN_HEIGHT; i += 16)
+    {
+        HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_oneLine1, (uint32_t)_currentScreenFB + (i * (SCREEN_WIDTH / 2)), sizeof(_oneLine1), 1);
+        // Wait for DMA transfer to complete.
+        while(stm32FMCSRAMCompleteFlag() == 0);
+        stm32FMCClearSRAMCompleteFlag();
+
+        HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_oneLine1, (uint32_t)_pendingScreenFB + (i * (SCREEN_WIDTH / 2)), sizeof(_oneLine1), 1);
+        // Wait for DMA transfer to complete.
+        while(stm32FMCSRAMCompleteFlag() == 0);
+        stm32FMCClearSRAMCompleteFlag();
+    }
 
     // Set number of EPD Waveform phases.
     _wfPhases = sizeof(waveform3Bit2) / sizeof(waveform3Bit2[0]);
@@ -115,7 +137,7 @@ void EPDDriver::clearDisplay()
     {
         for (int i = 0; i < (SCREEN_HEIGHT * SCREEN_WIDTH / 8); i++)
         {
-            partialBuffer[i] = 0;
+            _pendingScreenFB[i] = 0;
         }
     }
 
@@ -123,7 +145,7 @@ void EPDDriver::clearDisplay()
     {
         for (int i = 0; i < (SCREEN_HEIGHT * SCREEN_WIDTH / 2); i++)
         {
-            partialBuffer[i] = 255;
+            _pendingScreenFB[i] = 255;
         }
     }
 }
@@ -132,54 +154,107 @@ void EPDDriver::partialUpdate(uint8_t _leaveOn)
 {
     INKPLATE_DEBUG_MGS("Partial update 1bit start");
 
-    if (getDisplayMode() != INKPLATE_1BW)
-        return;
+    _wfPhases = 5;
 
-    if (_blockPartial == 1)
-    {
-        display1b(_leaveOn);
-        return;
-    }
+    //if (getDisplayMode() != INKPLATE_1BW)
+    //    return;
+
+    //if (_blockPartial == 1)
+    //{
+    //    display1b(_leaveOn);
+    //    return;
+    //}
 
     // Power up EPD PMIC. Abort update if failed.
-    if (!epdPSU(1)) return;
+    //if (!epdPSU(1)) return;
+
+    // Pointer to the framebuffer (used by the fast GLUT). It gets 4 pixels from the framebuffer.
+    uint16_t *_fbPtr;
     
     INKPLATE_DEBUG_MGS("Partial update 1bit pixel difference & send");
 
-    __IO uint8_t *_pos;
-    __IO uint8_t *_partialPos;
-    uint8_t diffw;
-    uint8_t diffb;
-    for (int k = 0; k < 7; k++)
-    {
-        vScanStart();
-        _pos = imageBuffer;
-        _partialPos = partialBuffer;
+    // Find the difference mask for the partial update (use scratchpad memory!).
+    uint32_t _pxDiff = differenceMask((uint8_t*)_currentScreenFB, (uint8_t*)_pendingScreenFB, _oneLine3, (uint8_t*)_scratchpadMemory);
 
+    for (int k = 0; k < _wfPhases; k++)
+    {
+        volatile uint8_t *ptr = _pendingScreenFB;
+
+        // First calculate the new fast GLUT for the next EPD waveform phase.
+        calculateGLUTOnTheFly(_fastGLUT, (uint8_t*)&(waveformPartialUpdate[k]));
+
+        // Get the 16 rows of the data (faster RAM read speed, since it reads whole RAM column at once).
+        // Reading line by line will gets us only 89MB/s read speed, but reading 16 rows or more at once will get us ~215MB/s read speed! Nice!
+        // Start the DMA transfer!
+        HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_scratchpadMemory, (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
+        while(stm32FMCSRAMCompleteFlag() == 0);
+        stm32FMCClearSRAMCompleteFlag();
+        ptr += sizeof(_oneLine1);
+
+        // Set the current working RAM buffer to the first RAM Buffer (_oneLine1).
+        _fbPtr = (uint16_t*)_oneLine1;
+
+        // Decode the first line
+        for (int n = 0; n < (SCREEN_WIDTH / 4); n++)
+        {
+            //_decodedLine1[n] = (GLUT2[(k << 8) + *(_currentRAMBuffer++)]) | (GLUT1[(k << 8) + *(_currentRAMBuffer++)]);
+            _decodedLine1[n] = _fastGLUT[*(_fbPtr++)];
+        }
+
+        // Set the pointers for double buffering.
+        _pendingDecodedLineBuffer = _decodedLine2;
+        _currentDecodedLineBuffer = _decodedLine1;
+
+        // Send to the screen!
+        vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
-            diffw = *(_pos) & ~*(_partialPos); // Calculate differences in white pixels
-            diffb = ~*(_pos) & *(_partialPos); // Calculate differences in black pixels
-            _pos++;                            // Move address pointers
-            _partialPos++;
-            hScanStart(LUTW[diffw >> 4] & (LUTB[diffb >> 4]),
-                        LUTW[diffw & 0x0F] &
-                            (LUTB[diffb & 0x0F]));          // Start sending first pixel byte to panel //Clock it!
-            for (int j = 0; j < (SCREEN_WIDTH / 8) - 1; j++) // Now do all that for whole row
+            hScanStart(_currentDecodedLineBuffer[0], _currentDecodedLineBuffer[1]);
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel41_sw_0, (uint32_t)_currentDecodedLineBuffer + 2, (uint32_t)EPD_FMC_ADDR, sizeof(_decodedLine1), 1);
+
+            // Decode the pixels into Waveform for EPD.
+            for (int n = 0; n < (SCREEN_WIDTH / 4); n++)
             {
-                diffw = *(_pos) & ~*(_partialPos);
-                diffb = ~*(_pos) & *(_partialPos);
-                _pos++;
-                _partialPos++;
-                *(__IO uint8_t *)(EPD_FMC_ADDR) = LUTW[diffw >> 4] & (LUTB[diffb >> 4]);
-                *(__IO uint8_t *)(EPD_FMC_ADDR) = LUTW[diffw & 0x0F] & (LUTB[diffb & 0x0F]);
+                _pendingDecodedLineBuffer[n] = _fastGLUT[*(_fbPtr++)];
             }
+
+            // Swap the buffers!
+            if (_currentDecodedLineBuffer == _decodedLine1)
+            {
+                _currentDecodedLineBuffer = _decodedLine2;
+                _pendingDecodedLineBuffer = _decodedLine1;
+            }
+            else
+            {
+                _currentDecodedLineBuffer = _decodedLine1;
+                _pendingDecodedLineBuffer = _decodedLine2;
+            }
+
+            // Can't start new transfer until all data is sent to EPD.
+            while(stm32FMCEPDCompleteFlag() == 0);
+            stm32FMCClearEPDCompleteFlag();
+
+            // Advance the line on EPD.
             vScanEnd();
+
+            // Check if the buffer needs to be updated (after 16 lines).
+            if ((i & 0b00001111) == 0b00001110)
+            {
+                // Update the buffer pointer.
+                _fbPtr = (uint16_t*)_oneLine1;
+
+                // Start new RAM DMA transfer.
+                HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)ptr, (uint32_t)(_oneLine1), sizeof(_oneLine1), 1);
+
+                ptr += sizeof(_oneLine1);
+
+                // Wait for DMA transfer to complete.
+                while(stm32FMCSRAMCompleteFlag() == 0);
+                stm32FMCClearSRAMCompleteFlag();
+            }
         }
     }
 
-    cleanFast(2, 1);
-    
     // Disable EPD PSU if needed.
     if (!_leaveOn)
         epdPSU(0);
@@ -187,10 +262,10 @@ void EPDDriver::partialUpdate(uint8_t _leaveOn)
     INKPLATE_DEBUG_MGS("Partial update buffer content update");
 
     // After update, copy differences to screen buffer
-    for (int i = 0; i < (SCREEN_HEIGHT * SCREEN_WIDTH / 8); i++)
-    {
-        *(imageBuffer + i) = *(partialBuffer + i);
-    }
+    //for (int i = 0; i < (SCREEN_HEIGHT * SCREEN_WIDTH / 8); i++)
+    //{
+    //    *(_currentScreenFB + i) = *(_pendingScreenFB + i);
+    //}
 
     INKPLATE_DEBUG_MGS("Partial update done");
 }
@@ -209,8 +284,8 @@ void EPDDriver::partialUpdate4Bit(uint8_t _leaveOn)
 
     // We present you the ugliest code ever...needs A LOT of clean up and optimisation!
     // Create the mask for pixel difference
-    __IO uint8_t *_pPartial = partialBuffer;
-    __IO uint8_t *_pImage = imageBuffer;
+    __IO uint8_t *_pPartial = _pendingScreenFB;
+    __IO uint8_t *_pImage = _currentScreenFB;
     for (int i = 0; i < SCREEN_HEIGHT; i++)
     {
         for (int j = 0; j < (SCREEN_WIDTH / 4); j++) // Now do all that for whole row
@@ -269,7 +344,7 @@ void EPDDriver::partialUpdate4Bit(uint8_t _leaveOn)
 
     for (int k = 0; k < _wfPhases; k++)
     {
-        __IO uint8_t *dp = partialBuffer;
+        __IO uint8_t *dp = _pendingScreenFB;
         _pPanelMask = _panelMask;
         vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
@@ -292,8 +367,8 @@ void EPDDriver::partialUpdate4Bit(uint8_t _leaveOn)
     // After update, copy differences to screen buffer
     for (int i = 0; i < (SCREEN_WIDTH * SCREEN_HEIGHT / 2); i++)
     {
-        *(imageBuffer + i) &= *(partialBuffer + i);
-        *(imageBuffer + i) |= *(partialBuffer + i);
+        *(_currentScreenFB + i) &= *(_pendingScreenFB + i);
+        *(_currentScreenFB + i) |= *(_pendingScreenFB + i);
     }
 
     // Disable EPD PSU if needed.
@@ -331,7 +406,7 @@ void EPDDriver::display1b(uint8_t _leaveOn)
 
     for (int k = 0; k < 10; k++)
     {
-        _pos = partialBuffer;
+        _pos = _pendingScreenFB;
         vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
@@ -353,13 +428,13 @@ void EPDDriver::display1b(uint8_t _leaveOn)
     // Full update? Copy everything in screen buffer before refresh!
     for (int i = 0; i < (SCREEN_HEIGHT * SCREEN_WIDTH) / 8; i++)
     {
-        imageBuffer[i] &= partialBuffer[i];
-        imageBuffer[i] |= partialBuffer[i];
+        _currentScreenFB[i] &= _pendingScreenFB[i];
+        _currentScreenFB[i] |= _pendingScreenFB[i];
     }
 
     for (int k = 0; k < 30; k++)
     {
-        _pos = imageBuffer;
+        _pos = _currentScreenFB;
         vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
@@ -379,7 +454,7 @@ void EPDDriver::display1b(uint8_t _leaveOn)
     cleanFast(2, 1);
     for (int k = 0; k < 30; k++)
     {
-        _pos = imageBuffer;
+        _pos = _currentScreenFB;
         vScanStart();
         for (int i = 0; i < SCREEN_HEIGHT; i++)
         {
@@ -410,7 +485,7 @@ void EPDDriver::display3b(uint8_t _leaveOn)
     // Full update? Copy everything in screen buffer before refresh!
     for (int i = 0; i < (SCREEN_HEIGHT * SCREEN_WIDTH) / 2; i++)
     {
-        imageBuffer[i] = partialBuffer[i];
+        _currentScreenFB[i] = _pendingScreenFB[i];
     }
 
     // Power up EPD PMIC. Abort update if failed.
@@ -431,7 +506,7 @@ void EPDDriver::display3b(uint8_t _leaveOn)
 
     for (int k = 0; k < _wfPhases; k++)
     {
-        volatile uint8_t *ptr = partialBuffer;
+        volatile uint8_t *ptr = _pendingScreenFB;
 
         // First calculate the new fast GLUT for the next EPD waveform phase.
         calculateGLUTOnTheFly(_fastGLUT, (uint8_t*)&(waveform3Bit2[k]));
@@ -439,7 +514,7 @@ void EPDDriver::display3b(uint8_t _leaveOn)
         // Get the 16 rows of the data (faster RAM read speed, since it reads whole RAM column at once).
         // Reading line by line will gets us only 89MB/s read speed, but reading 16 rows or more at once will get us ~215MB/s read speed! Nice!
         // Start the DMA transfer!
-        HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)partialBuffer, (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
+        HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_pendingScreenFB, (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
         while(stm32FMCSRAMCompleteFlag() == 0);
         stm32FMCClearSRAMCompleteFlag();
         ptr += sizeof(_oneLine1);
@@ -718,6 +793,90 @@ void EPDDriver::epdGpioState(uint8_t _state)
     }
 }
 
+uint32_t EPDDriver::differenceMask(uint8_t *_currentScreenFB, uint8_t *_pendingScreenFB, uint8_t *_helperArray, uint8_t *_differenceMask)
+{
+    // Try to find the difference between two frame buffers.
+    // Use same idea as in scren update (get 16 lines at once) to speed up the process.
+
+    // Pointers for the lines
+    uint8_t *_ptrLine1 = (uint8_t*)_oneLine1;
+    uint8_t *_ptrLine2 = (uint8_t*)_oneLine2;
+    uint8_t *_ptrHelper = (uint8_t*)_helperArray;
+
+    // Get the first 16 lines from the both buffers into internal RAM.
+    HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_currentScreenFB, (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
+    while(stm32FMCSRAMCompleteFlag() == 0);
+    stm32FMCClearSRAMCompleteFlag();
+
+    HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_pendingScreenFB, (uint32_t)_oneLine2, sizeof(_oneLine2), 1);
+    while(stm32FMCSRAMCompleteFlag() == 0);
+    stm32FMCClearSRAMCompleteFlag();
+
+    // Set the offset for the framebuffer address.
+    uint32_t _fbAddressOffset = (SCREEN_WIDTH / 2) * 16;
+
+    // Used for counting how many pixels will change.
+    uint32_t _change = 0;
+
+    // Create the difference mask!
+    for (int i = 0; i < SCREEN_HEIGHT; i++)
+    {
+        for (int j = 0; j < SCREEN_WIDTH / 2; j++)
+        {
+            // Temporary variable for pixel difference.
+            uint8_t _pxDifference = *(_ptrLine1) ^ *(_ptrLine2);
+            *(_ptrHelper) = 0x0000;
+
+            // Check for the difference in the 16 bit itself.
+            if (_pxDifference & 0x000F)
+            {
+                *(_ptrHelper) |= 0x000F;
+                _change++;
+            }
+            if (_pxDifference & 0x00F0)
+            {
+                *(_ptrHelper) |= 0x00F0;
+                _change++;
+            }
+
+            // Update the array.
+            (*_ptrHelper) = (*_ptrHelper) & (*_ptrLine2);
+
+            _ptrHelper++;
+            _ptrLine1++;
+            _ptrLine2++;
+        }
+
+        // Get more data from the SDRAM if needed.
+        if ((i & 0b00001111) == 0b00001111)
+        {
+            // Get the more data from the SDRAM. Do not forget add the offset to the framebuffer address.
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_currentScreenFB + _fbAddressOffset, (uint32_t)_oneLine1, sizeof(_oneLine1), 1);
+            while(stm32FMCSRAMCompleteFlag() == 0);
+            stm32FMCClearSRAMCompleteFlag();
+
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_pendingScreenFB + _fbAddressOffset, (uint32_t)_oneLine2, sizeof(_oneLine2), 1);
+            while(stm32FMCSRAMCompleteFlag() == 0);
+            stm32FMCClearSRAMCompleteFlag();
+
+            // Send data to the difference mask.
+            HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_helperArray, (uint32_t)_differenceMask + _fbAddressOffset, sizeof(_oneLine1), 1);
+            while(stm32FMCSRAMCompleteFlag() == 0);
+            stm32FMCClearSRAMCompleteFlag();
+
+            // Update the pointers.
+            _ptrLine1 = (uint8_t*)_oneLine1;
+            _ptrLine2 = (uint8_t*)_oneLine2;
+            _ptrHelper = (uint8_t*)_helperArray;
+            _fbAddressOffset += (SCREEN_WIDTH / 2) * 16;
+        }
+    }
+
+    // Return number of pixels needed to change.
+    return _change;
+}
+
+// NOT USED ANYMORE!
 void EPDDriver::calculateGLUT(uint8_t *_waveform, uint8_t **_lut1, uint8_t **_lut2, int _phases)
 {
     // Clear previous memory allocation

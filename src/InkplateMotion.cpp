@@ -83,8 +83,8 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color)
         int x = x0 / 8;
         int x_sub = x0 % 8;
 
-        uint8_t temp = *(partialBuffer + (SCREEN_WIDTH / 8 * y0) + x);
-        *(partialBuffer + (SCREEN_WIDTH / 8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
+        uint8_t temp = *(_pendingScreenFB + (SCREEN_WIDTH / 8 * y0) + x);
+        *(_pendingScreenFB + (SCREEN_WIDTH / 8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
     }
     else
     {
@@ -93,8 +93,8 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color)
         int x_sub = x0 % 2;
         uint8_t temp;
 
-        temp = *(partialBuffer + SCREEN_WIDTH / 2 * y0 + x);
-        *(partialBuffer + SCREEN_WIDTH / 2 * y0 + x) = pixelMaskGLUT1[x_sub] & temp | (x_sub ? color << 4 : color);
+        temp = *(_pendingScreenFB + SCREEN_WIDTH / 2 * y0 + x);
+        *(_pendingScreenFB + SCREEN_WIDTH / 2 * y0 + x) = pixelMaskGLUT1[x_sub] & temp | (x_sub ? color << 4 : color);
     }
 }
 
