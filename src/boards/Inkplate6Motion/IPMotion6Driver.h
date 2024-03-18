@@ -25,6 +25,8 @@
 // Include library defines
 #include "../../system/defines.h"
 
+#include "arm_math.h"
+
 // Defines for EPD GPIOs
 #define EPD_DRIVER_PINS_OUTPUT  0
 #define EPD_DRIVER_PINS_H_ZI    1

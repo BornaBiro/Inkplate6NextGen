@@ -166,15 +166,17 @@ void EPDDriver::partialUpdate(uint8_t _leaveOn)
     //}
 
     // Power up EPD PMIC. Abort update if failed.
-    //if (!epdPSU(1)) return;
+    if (!epdPSU(1)) return;
 
     // Pointer to the framebuffer (used by the fast GLUT). It gets 4 pixels from the framebuffer.
     uint16_t *_fbPtr;
     
     INKPLATE_DEBUG_MGS("Partial update 1bit pixel difference & send");
 
+    GPIOA->BSRR = (1 << 4);
     // Find the difference mask for the partial update (use scratchpad memory!).
     uint32_t _pxDiff = differenceMask((uint8_t*)_currentScreenFB, (uint8_t*)_pendingScreenFB, _oneLine3, (uint8_t*)_scratchpadMemory);
+    GPIOA->BSRR = (1 << 4) << 16;
 
     for (int k = 0; k < _wfPhases; k++)
     {
@@ -860,9 +862,9 @@ uint32_t EPDDriver::differenceMask(uint8_t *_currentScreenFB, uint8_t *_pendingS
             stm32FMCClearSRAMCompleteFlag();
 
             // Send data to the difference mask.
-            HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_helperArray, (uint32_t)_differenceMask + _fbAddressOffset, sizeof(_oneLine1), 1);
-            while(stm32FMCSRAMCompleteFlag() == 0);
-            stm32FMCClearSRAMCompleteFlag();
+            //HAL_MDMA_Start_IT(&hmdma_mdma_channel40_sw_0, (uint32_t)_helperArray, (uint32_t)_differenceMask + _fbAddressOffset, sizeof(_oneLine1), 1);
+            //while(stm32FMCSRAMCompleteFlag() == 0);
+            //stm32FMCClearSRAMCompleteFlag();
 
             // Update the pointers.
             _ptrLine1 = (uint8_t*)_oneLine1;
