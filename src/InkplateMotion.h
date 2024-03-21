@@ -27,6 +27,9 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 // Include library defines
 #include "system/defines.h"
 
+// Include custom RTC library for STM32.
+#include "libs/STM32H7RTC.h"
+
 // Clases for SPI driver for microSD.
 extern SPIClass spi2;
 extern SdFat sd;
