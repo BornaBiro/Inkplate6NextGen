@@ -55,7 +55,7 @@ int EPDDriver::initDriver()
     }
 
     // Set VCOM to -2.45V (for testing only).
-    pmic.setVCOM(-1.75);
+    pmic.setVCOM(-2.45);
 
     // Init STM32 FMC (Flexible memory controller) for faster pushing data to panel using Hardware (similar to ESP32 I2S).
     // Parallel, but much faster and better).
@@ -65,7 +65,7 @@ int EPDDriver::initDriver()
     pmic.setPowerOffSeq(0b00000000, 0b00000000);
 
     // Turn off EPD PMIC.
-    internalIO.digitalWriteIO(TPS_WAKE_PIN, LOW, true);
+    //internalIO.digitalWriteIO(TPS_WAKE_PIN, LOW, true);
 
     // Clear the framebuffers.
     // Set the color (white).
@@ -643,6 +643,9 @@ int EPDDriver::epdPSU(uint8_t _state)
             return 0;
         }
 
+        // Enable buffer for the control ePaper lines.
+        EPD_BUF_CLEAR;
+
         // Set new PMIC state.
         _epdPSUState = 1;
     }
@@ -659,6 +662,9 @@ int EPDDriver::epdPSU(uint8_t _state)
         LE_CLEAR;
         internalIO.digitalWriteIO(TPS_VCOM_CTRL_PIN, LOW, true);
         internalIO.digitalWriteIO(TPS_PWRUP_PIN, LOW, true);
+
+        // Disable buffer for the control ePaper lines.
+        EPD_BUF_SET;
 
         // 250ms should be long enough to shut down all EPD PMICs voltage rails.
         unsigned long timer = millis();
@@ -695,6 +701,9 @@ void EPDDriver::gpioInit()
     internalIO.blockPinUsage(4);
     // TPS EPD PMIC VCOM_CTRL.
     internalIO.blockPinUsage(5);
+
+    // Set EPD buffer enable for ePaper control pins to output.
+    pinMode(EPD_BUFF_PIN, OUTPUT);
 
     // For some reason, HAL doesn't initalize GPIOs for FMC properly, so it has to be done with Arduino pinMode() function.
     pinMode(PF0, OUTPUT);
