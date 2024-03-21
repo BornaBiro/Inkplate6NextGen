@@ -65,6 +65,10 @@ static inline void vScanStart()
     CKV_SET;
     delayMicroseconds(18);
     CKV_CLEAR;
+    delayMicroseconds(1);
+    CKV_SET;
+    delayMicroseconds(18);
+    CKV_CLEAR;
 }
 
 // Compiler be nice, please do not optimise this function.
