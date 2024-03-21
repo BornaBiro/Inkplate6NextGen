@@ -25,6 +25,9 @@
 // Include library defines
 #include "../../system/defines.h"
 
+// Include library for PCAL6416A GPIO expander.
+#include "../../system/PCAL_IO.h"
+
 #include "arm_math.h"
 
 // Defines for EPD GPIOs
@@ -110,7 +113,11 @@ class EPDDriver
         void selectDisplayMode(uint8_t _mode);
         uint8_t getDisplayMode();
 
+        // Object for ePaper power managment IC.
         EpdPmic pmic;
+
+        // Object for GPIO expander.
+        IOExpander internalIO;
     
     protected:
         // Function initializes all GPIO pins used on Inkplate for driving EPD.

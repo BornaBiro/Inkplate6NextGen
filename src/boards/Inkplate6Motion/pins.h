@@ -4,6 +4,9 @@
 // Header guard for the Arduino include
 #ifdef BOARD_INKPLATE6_MOTION
 
+// I2C address for Internal GPIO expander.
+#define IO_EXPANDER_INTERNAL_I2C_ADDR 0x20
+
 // Define EPD Pins. Using direct port manipulation for higher speed.
 // EPD Latch pin <-> PE6
 #define LE                  GPIO_PIN_6
@@ -41,24 +44,28 @@
 #define SPV_CLEAR           GPIOG->BSRR = (SPV << 16);
 #define EPD_SPV_GPIO        PG12
 
-// Define pins for TPS65185/TPS65186 EPD PMIC.
-// EPD PMIC WakeUp pin <-> PG6 (for now, in future it will be connected to the I/O expander!).
-#define WAKEUP              GPIO_PIN_6
-#define WAKEUP_SET          GPIOG->BSRR = WAKEUP;
-#define WAKEUP_CLEAR        GPIOG->BSRR = WAKEUP << 16;
-#define TPS_WAKE_GPIO       PG6
+// // Define pins for TPS65185/TPS65186 EPD PMIC.
+// // EPD PMIC WakeUp pin <-> PG6 (for now, in future it will be connected to the I/O expander!).
+// #define WAKEUP              GPIO_PIN_6
+// #define WAKEUP_SET          GPIOG->BSRR = WAKEUP;
+// #define WAKEUP_CLEAR        GPIOG->BSRR = WAKEUP << 16;
+// #define TPS_WAKE_GPIO       PG6
 
-// EPD PMIC PowerUp pin <-> PC13 (for now, in future it will be connected to the I/O expander!).
-#define PWRUP               GPIO_PIN_13
-#define PWRUP_SET           GPIOC->BSRR = PWRUP;
-#define PWRUP_CLEAR         GPIOC->BSRR = PWRUP << 16;
-#define TPS_PWR_GPIO        PC13
+// // EPD PMIC PowerUp pin <-> PC13 (for now, in future it will be connected to the I/O expander!).
+// #define PWRUP               GPIO_PIN_13
+// #define PWRUP_SET           GPIOC->BSRR = PWRUP;
+// #define PWRUP_CLEAR         GPIOC->BSRR = PWRUP << 16;
+// #define TPS_PWR_GPIO        PC13
 
-// EPD PMIC VCOM drive pin <-> PA0 (for now, in future it will be connected to the I/O expander!).
-#define VCOM                GPIO_PIN_0
-#define VCOM_SET            GPIOA->BSRR = VCOM;
-#define VCOM_CLEAR          GPIOA->BSRR = VCOM << 16;
-#define TPS_VCOMCTRL_GPIO   PA0
+// // EPD PMIC VCOM drive pin <-> PA0 (for now, in future it will be connected to the I/O expander!).
+// #define VCOM                GPIO_PIN_0
+// #define VCOM_SET            GPIOA->BSRR = VCOM;
+// #define VCOM_CLEAR          GPIOA->BSRR = VCOM << 16;
+// #define TPS_VCOMCTRL_GPIO   PA0
+
+#define TPS_WAKE_PIN        3
+#define TPS_PWRUP_PIN       4
+#define TPS_VCOM_CTRL_PIN   5
 
 // GPIO pins for TPS65185/TPS65186 EPD PMIC.
 #define TPS_SDA_GPIO        PB9

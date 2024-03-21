@@ -32,11 +32,17 @@ int EPDDriver::initDriver()
 {
     INKPLATE_DEBUG_MGS("EPD Driver init started");
 
+    // Configure IO expander.
+    if (!internalIO.beginIO(IO_EXPANDER_INTERNAL_I2C_ADDR))
+    {
+        INKPLATE_DEBUG_MGS("GPIO expander init fail");
+    }
+
     // Configure GPIO pins.
     gpioInit();
 
     // Enable TPS65186 and keep it on.
-    WAKEUP_SET;
+    internalIO.digitalWriteIO(TPS_WAKE_PIN, HIGH, true);
 
     // Wait a little bit for PMIC.
     delay(10);
@@ -59,7 +65,7 @@ int EPDDriver::initDriver()
     pmic.setPowerOffSeq(0b00000000, 0b00000000);
 
     // Turn off EPD PMIC.
-    WAKEUP_CLEAR;
+    internalIO.digitalWriteIO(TPS_WAKE_PIN, LOW, true);
 
     // Clear the framebuffers.
     // Set the color (white).
@@ -601,9 +607,10 @@ int EPDDriver::epdPSU(uint8_t _state)
     // Enable the EPD power supply
     if (_state)
     {
-        WAKEUP_SET;
+        // Set EPD PMIC to high.
+        internalIO.digitalWriteIO(TPS_WAKE_PIN, HIGH, true);
         delay(1);
-        PWRUP_SET;
+        internalIO.digitalWriteIO(TPS_PWRUP_PIN, HIGH, true);
         delay(1);
 
         // Enable all rails
@@ -617,7 +624,7 @@ int EPDDriver::epdPSU(uint8_t _state)
         SPV_SET;
         CKV_CLEAR;
         OE_SET;
-        VCOM_SET;
+        internalIO.digitalWriteIO(TPS_VCOM_CTRL_PIN, HIGH, true);
 
         // Wait until EPD PMIC has all needed voltages at it's outputs.
         // 250 ms should be long enough.
@@ -630,8 +637,8 @@ int EPDDriver::epdPSU(uint8_t _state)
         // Not ready even after 250ms? Something is wrong, shut down TPS!
         if (pmic.getPwrgoodFlag() != TPS_PWR_GOOD_OK)
         {
-            VCOM_CLEAR;
-            PWRUP_CLEAR;
+            internalIO.digitalWriteIO(TPS_VCOM_CTRL_PIN, LOW, true);
+            internalIO.digitalWriteIO(TPS_PWRUP_PIN, LOW, true);
             INKPLATE_DEBUG_MGS("EPC PMIC power up failed");
             return 0;
         }
@@ -650,8 +657,8 @@ int EPDDriver::epdPSU(uint8_t _state)
         SPH_CLEAR;
         SPV_CLEAR;
         LE_CLEAR;
-        VCOM_CLEAR;
-        PWRUP_CLEAR;
+        internalIO.digitalWriteIO(TPS_VCOM_CTRL_PIN, LOW, true);
+        internalIO.digitalWriteIO(TPS_PWRUP_PIN, LOW, true);
 
         // 250ms should be long enough to shut down all EPD PMICs voltage rails.
         unsigned long timer = millis();
@@ -679,6 +686,16 @@ int EPDDriver::epdPSU(uint8_t _state)
 
 void EPDDriver::gpioInit()
 {
+    // Disable user usage on some GPIO expander pins.
+    // APDS interrupt pin.
+    internalIO.blockPinUsage(0);
+    // TPS EPD PMIC Wakeup.
+    internalIO.blockPinUsage(3);
+    // TPS EPD PMIC PWRUP.
+    internalIO.blockPinUsage(4);
+    // TPS EPD PMIC VCOM_CTRL.
+    internalIO.blockPinUsage(5);
+
     // For some reason, HAL doesn't initalize GPIOs for FMC properly, so it has to be done with Arduino pinMode() function.
     pinMode(PF0, OUTPUT);
     pinMode(PF1, OUTPUT);
@@ -735,9 +752,9 @@ void EPDDriver::gpioInit()
     pinMode(ANALOG_BATTERY_MEASUREMENT, INPUT_ANALOG);
 
     // Set TPS control pins to outputs.
-    pinMode(TPS_PWR_GPIO, OUTPUT);
-    pinMode(TPS_WAKE_GPIO, OUTPUT);
-    pinMode(TPS_VCOMCTRL_GPIO, OUTPUT);
+    internalIO.pinModeIO(TPS_PWRUP_PIN, OUTPUT, true);
+    internalIO.pinModeIO(TPS_WAKE_PIN, OUTPUT, true);
+    internalIO.pinModeIO(TPS_VCOM_CTRL_PIN, OUTPUT, true);
 
     // Set the type of the EPD control pins. 
     pinMode(EPD_CKV_GPIO, OUTPUT);
